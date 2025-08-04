@@ -1,7 +1,6 @@
-
-
-// Responsive merch grid with image, title, description, and Stripe checkout link
 "use client";
+
+import Image from "next/image";
 
 type MerchItem = {
   id: string;
@@ -43,9 +42,11 @@ export default function MerchGrid() {
           key={item.id}
           className="bg-gray-900 rounded-lg p-6 text-center shadow hover:shadow-xl transition"
         >
-          <img
+          <Image
             src={item.image}
             alt={item.title}
+            width={400}
+            height={400}
             className="w-full h-64 object-cover rounded"
           />
           <h3 className="mt-4 text-xl font-semibold">{item.title}</h3>

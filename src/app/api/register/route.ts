@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import nodemailer from "nodemailer";
 
+type Attendee = {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  shirtSize: string;
+  notes?: string;
+};
+
 const prisma = new PrismaClient();
 
 export async function POST(req: Request) {
@@ -17,7 +26,7 @@ export async function POST(req: Request) {
         contactAddress,
         prayerRequest,
         attendees: {
-          create: attendees.map((a: any) => ({
+          create: attendees.map((a: Attendee) => ({
             name: a.name,
             phone: a.phone,
             email: a.email,
@@ -86,7 +95,7 @@ export async function POST(req: Request) {
           <ul>
             ${attendees
               .map(
-                (a: any) =>
+                (a: Attendee) =>
                   `<li>${a.name} (${a.phone}) - Shirt Size: ${a.shirtSize}</li>`
               )
               .join("")}

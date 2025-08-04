@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import ConferenceRegistration from "./ConferenceRegistration";
 import { useState } from "react";
 

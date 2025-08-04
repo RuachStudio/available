@@ -1,37 +1,38 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 const speakers = [
   {
     name: "Jessica Gainey & Michelle Chapman",
     title: "Breakout 2/C: Are You Disqualified?",
-    image: "/speakers/jessica-michelle.jpg",
+    image: "/speakers/jessica-michelle.webp",
   },
   {
     name: "Bradley Bennett",
     title: "Session 1: 5 Fold Ministry",
-    image: "/speakers/bradley.jpg",
+    image: "/speakers/bradley.webp",
   },
   {
     name: "Brooke Kinchen",
     title: "Friday Night Service / Breakout 1/C: Creatively Available",
-    image: "/speakers/brooke.jpg",
+    image: "/speakers/brooke.webp",
   },
   {
     name: "Ashley May",
     title: "Breakout 2/A: When You Say YES!",
-    image: "/speakers/ashley.jpg",
+    image: "/speakers/ashley.webp",
   },
   {
     name: "Tessie Baehr",
     title: "Breakout 1/A: Physically Available",
-    image: "/speakers/tessie.jpg",
+    image: "/speakers/tessie.webp",
   },
   {
     name: "Apostle Krista Lathem",
     title: "Saturday Night: Commissioning Service",
-    image: "/speakers/krista.jpg",
+    image: "/speakers/krista.webp",
   },
 ];
 
@@ -51,9 +52,11 @@ export default function SpeakersSection() {
             viewport={{ once: true }}
           >
             <div className="overflow-hidden rounded-md">
-              <img
+              <Image
                 src={speaker.image}
                 alt={speaker.name}
+                width={400}
+                height={400}
                 className="w-full h-56 object-cover rounded-md transition-transform duration-300 hover:scale-105"
               />
             </div>
