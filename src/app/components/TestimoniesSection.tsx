@@ -34,18 +34,18 @@ export default function TestimoniesSection() {
   return (
     <section className="py-20 px-6 bg-black text-white">
       <h2 className="text-3xl font-bold mb-8 text-center">Real People. Real Surrender.</h2>
-      <div className="overflow-x-auto whitespace-nowrap flex gap-6 pb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 justify-items-center">
         {mockTestimonies.map(({ id, name, quote, videoUrl }) => (
           <div
             key={id}
-            className="w-72 bg-gray-900 rounded-lg p-4 shadow-md shrink-0"
+            className="w-72 bg-gray-900 rounded-lg p-4 shadow-md transition-transform transform hover:scale-105 hover:shadow-xl"
           >
             <video
               src={videoUrl}
               controls
-              className="w-full h-40 object-cover rounded mb-3"
+              className="w-full h-44 object-cover rounded mb-4"
             />
-            <h3 className="text-lg font-semibold">{name}</h3>
+            <h3 className="text-lg font-semibold mb-3">{name}</h3>
             <p className="text-sm text-gray-300 italic">“{quote}”</p>
           </div>
         ))}

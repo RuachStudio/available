@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
-const EVENT_DATE = new Date("2025-08-01T19:00:00-05:00");
+const EVENT_DATE = new Date("2025-08-08T19:00:00-05:00");
 
 function getTimeLeft(target: Date) {
   const now = new Date().getTime();
@@ -84,7 +84,7 @@ export default function CountdownSection() {
               </motion.span>
             ))}
           </div>
-          <p className="mt-6 text-lg text-gray-400">August 1st • 7PM CST</p>
+          <p className="mt-6 text-lg text-gray-400">August 8th • 7PM CDT</p>
         </motion.div>
 
         {/* Right: Visual or quote */}
