@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Vote from "./Vote";
 
 const shirtSizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
@@ -11,6 +12,7 @@ interface ConferenceRegistrationProps {
 
 export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRegistrationProps) {
   const [ticketCount, setTicketCount] = useState(1);
+  const [showPoll, setShowPoll] = useState(false);
   const [formData, setFormData] = useState({
     contactName: "",
     contactPhone: "",
@@ -55,7 +57,7 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
       console.log("Registration successful:", data);
 
       alert("✅ Registration successful! A confirmation email has been sent.");
-      onClose(); // Close modal on success
+      setShowPoll(true); // Show poll instead of closing modal
     } catch (error) {
       console.error("Error:", error);
       alert("❌ There was an issue submitting your registration.");
@@ -67,19 +69,23 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
       {/* Overlay */}
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center overflow-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-            className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-2xl text-black relative max-h-[90vh] overflow-y-auto"
-          >
-            {/* Close Button */}
-            <button 
-              onClick={onClose} 
-              className="absolute top-3 right-3 text-gray-500 hover:text-black text-xl"
-            >
-              ✕
-            </button>
+          <AnimatePresence mode="wait">
+            {!showPoll ? (
+              <motion.div
+                key="registration"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -30 }}
+                transition={{ duration: 0.3 }}
+                className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-2xl text-black relative max-h-[90vh] overflow-y-auto"
+              >
+                {/* Close Button */}
+                <button 
+                  onClick={onClose} 
+                  className="absolute top-3 right-3 text-gray-500 hover:text-black text-xl"
+                >
+                  ✕
+                </button>
       <h2 className="text-2xl font-bold text-center mb-4">Conference Registration</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Primary Contact */}
@@ -170,7 +176,27 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
           Submit Registration
         </button>
       </form>
-          </motion.div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="poll"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -30 }}
+                transition={{ duration: 0.3 }}
+                className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-3xl text-black relative max-h-[90vh] overflow-y-auto"
+              >
+                {/* Close Button */}
+                <button 
+                  onClick={onClose} 
+                  className="absolute top-3 right-3 text-gray-500 hover:text-black text-xl"
+                >
+                  ✕
+                </button>
+                <Vote />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
     </>

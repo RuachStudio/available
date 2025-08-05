@@ -15,12 +15,16 @@ if (process.env.NODE_ENV === 'production') {
   (async () => {
     try {
       await prisma.$connect();
-    } catch (err) {
-      console.warn('⚠️ Prisma connection failed. Regenerating Prisma Client...');
-      const { execSync } = await import('child_process');
-      execSync('npx prisma generate', { stdio: 'inherit' });
-      await prisma.$connect();
-      console.log('✅ Prisma Client regenerated and connected successfully.');
+    } catch {
+      console.warn('⚠️ Prisma connection failed. Attempting regeneration...');
+      try {
+        const { execSync } = await import('child_process');
+        execSync('npx prisma generate', { stdio: 'inherit' });
+        await prisma.$connect();
+        console.log('✅ Prisma Client regenerated and connected successfully.');
+      } catch (regenErr) {
+        console.error('❌ Prisma regeneration failed:', regenErr);
+      }
     }
   })();
 }

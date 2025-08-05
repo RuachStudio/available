@@ -20,20 +20,24 @@ export default function SpeakersSection() {
         {speakerPosters.map((poster, index) => (
           <motion.div
             key={index}
-            className="w-full"
+            className="relative w-full group overflow-hidden rounded-lg shadow-lg"
             initial={{ opacity: 0, y: 50 }}
             whileInView={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: index * 0.1 }}
             viewport={{ once: true }}
+            whileHover={{ scale: 1.02 }}
           >
             <Image
               src={poster.src}
               alt={poster.alt}
               width={1080}
               height={1350}
-              className="rounded-lg w-full h-auto object-cover"
+              className="rounded-lg w-full h-auto object-cover transition-transform duration-500 group-hover:scale-105"
               priority
             />
+            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+              <p className="text-white text-xl font-semibold px-4 text-center">{poster.alt}</p>
+            </div>
           </motion.div>
         ))}
       </div>
