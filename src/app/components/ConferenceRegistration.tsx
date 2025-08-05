@@ -85,7 +85,7 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
         {/* Primary Contact */}
         <input name="contactName" type="text" placeholder="Your Full Name" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
         <input name="contactPhone" type="tel" placeholder="Your Phone Number" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
-        <input name="contactEmail" type="email" placeholder="Your Email (Optional)" className="w-full p-3 border rounded-lg" onChange={handleChange} />
+        <input name="contactEmail" type="email" placeholder="Your Email" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
         <input name="contactAddress" type="text" placeholder="Your Mailing Address (Optional)" className="w-full p-3 border rounded-lg" onChange={handleChange} />
 
         {/* T-Shirt Size for Primary Contact */}
