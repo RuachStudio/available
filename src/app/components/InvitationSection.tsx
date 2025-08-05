@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import ConferenceRegistration from "./ConferenceRegistration";
+import ConferenceRegistration from "./ConfrenceRegistration";
 
 export default function InvitationSection() {
     const [showOverlay, setShowOverlay] = useState(false);

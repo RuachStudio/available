@@ -1,5 +1,5 @@
 "use client";
-import ConferenceRegistration from "./ConferenceRegistration";
+import ConferenceRegistration from "./ConfrenceRegistration";
 import { useState } from "react";
 
 export default function HeroSection() {

@@ -4,5 +4,5 @@ export { default as CountdownSection } from "./CountdownSection";
 export { default as MerchSection } from "./MerchSection";
 export { default as TestimoniesSection } from "./TestimoniesSection";
 export { default as Footer } from "./Footer";
-export { default as RSVPForm } from "./RSVPForm";
+export { default as ConfrenceRegistration } from "./ConfrenceRegistration";
 export { default as MerchGrid } from "./MerchGrid";

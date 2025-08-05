@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = 'force-dynamic';
 
-import ConferenceRegistration from "../components/ConferenceRegistration";
+import ConferenceRegistration from "../components/ConfrenceRegistration";
 
 export default function RegisterPage() {
   return (
