@@ -20,13 +20,19 @@ function getTimeLeft(target: Date) {
 
 export default function CountdownSection() {
   const [timeLeft, setTimeLeft] = useState(() => getTimeLeft(EVENT_DATE));
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const timer = setInterval(() => {
       setTimeLeft(getTimeLeft(EVENT_DATE));
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  if (!mounted) {
+    return null; // Prevent SSR hydration mismatch
+  }
 
   if (!timeLeft) {
     return (
