@@ -11,7 +11,24 @@ type Attendee = {
   notes?: string;
 };
 
-const prisma = new PrismaClient();
+let prisma: PrismaClient;
+
+if (process.env.NODE_ENV === "production") {
+  // Ensure fresh Prisma Client in Vercel's serverless environment
+  const { execSync } = await import("child_process");
+  try {
+    console.log("🔄 Generating Prisma Client at runtime...");
+    execSync("npx prisma generate", { stdio: "inherit" });
+  } catch (err) {
+    console.warn("⚠️ Prisma generate failed at runtime:", err);
+  }
+  prisma = new PrismaClient();
+} else {
+  // Use global Prisma instance in development to avoid hot-reload issues
+  const globalForPrisma = global as unknown as { prisma: PrismaClient };
+  prisma = globalForPrisma.prisma || new PrismaClient();
+  if (!globalForPrisma.prisma) globalForPrisma.prisma = prisma;
+}
 
 export async function POST(req: Request) {
   try {
@@ -66,8 +83,23 @@ export async function POST(req: Request) {
               : ""
           }
           <hr/>
-          <p><strong>Date:</strong> [Insert Conference Date Here]</p>
-          <p><strong>Location:</strong> [Insert Venue Here]</p>
+          <p><strong>Date:</strong> October 17 & 18</p>
+          <p><strong>Location:</strong> Camp Living Waters<br/>21230 Livingwater Rd, Loranger, LA 70446</p>
+          <p><strong>Doors Open:</strong> 6 PM Friday Night</p>
+          <hr/>
+          <div style="margin-top:20px; font-style:italic; font-size:14px; color:#555;">
+            <h3 style="margin-bottom:8px;">Isaiah 6:1-8 — Isaiah’s Commission</h3>
+            <p>6 In the year that King Uzziah died, I saw the Lord, high and exalted, seated on a throne; and the train of his robe filled the temple.</p>
+            <p>2 Above him were seraphim, each with six wings: With two wings they covered their faces, with two they covered their feet, and with two they were flying.</p>
+            <p>3 And they were calling to one another:</p>
+            <blockquote style="margin:8px 0; font-style:italic;">“Holy, holy, holy is the Lord Almighty; the whole earth is full of his glory.”</blockquote>
+            <p>4 At the sound of their voices the doorposts and thresholds shook and the temple was filled with smoke.</p>
+            <p>5 “Woe to me!” I cried. “I am ruined! For I am a man of unclean lips, and I live among a people of unclean lips, and my eyes have seen the King, the Lord Almighty.”</p>
+            <p>6 Then one of the seraphim flew to me with a live coal in his hand, which he had taken with tongs from the altar.</p>
+            <p>7 With it he touched my mouth and said, “See, this has touched your lips; your guilt is taken away and your sin atoned for.”</p>
+            <p>8 Then I heard the voice of the Lord saying, “Whom shall I send? And who will go for us?”</p>
+            <p>And I said, “Here am I. Send me!”</p>
+          </div>
           <p>— The AVAILABLE Conference Team</p>
         `,
       });
