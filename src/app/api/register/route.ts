@@ -113,16 +113,22 @@ export async function POST(req: Request) {
         },
         include: { attendees: true },
       });
-    } catch (dbErr: any) {
-      if (dbErr instanceof Prisma.PrismaClientKnownRequestError && dbErr.code === "P2002") {
+    } catch (dbErr: unknown) {
+      if (
+        dbErr instanceof Prisma.PrismaClientKnownRequestError &&
+        dbErr.code === "P2002"
+      ) {
         console.error("❌ Duplicate entry detected:", dbErr.meta);
         return NextResponse.json(
           { error: "Duplicate entry", field: dbErr.meta?.target },
           { status: 400 }
         );
       }
-      console.error("❌ Prisma error while creating registration:", dbErr);
-      throw new Error(dbErr.message || "Database error during registration");
+      if (dbErr instanceof Error) {
+        console.error("❌ Prisma error while creating registration:", dbErr);
+        throw new Error(dbErr.message || "Database error during registration");
+      }
+      throw new Error("Unknown database error");
     }
 
     console.log("📧 Sending confirmation email...");
@@ -135,8 +141,12 @@ export async function POST(req: Request) {
           html: buildConfirmationEmail(contactName, attendees, prayerRequest),
         });
       }
-    } catch (emailErr) {
-      console.error("⚠️ Failed to send confirmation email:", emailErr);
+    } catch (emailErr: unknown) {
+      if (emailErr instanceof Error) {
+        console.error("⚠️ Failed to send confirmation email:", emailErr);
+      } else {
+        console.error("⚠️ Failed to send confirmation email:", emailErr);
+      }
     }
 
     console.log("📧 Sending admin notification email...");
@@ -149,14 +159,22 @@ export async function POST(req: Request) {
           html: buildAdminEmail(contactName, contactPhone, contactEmail, attendees, prayerRequest),
         });
       }
-    } catch (adminEmailErr) {
-      console.error("⚠️ Failed to send admin email:", adminEmailErr);
+    } catch (adminEmailErr: unknown) {
+      if (adminEmailErr instanceof Error) {
+        console.error("⚠️ Failed to send admin email:", adminEmailErr);
+      } else {
+        console.error("⚠️ Failed to send admin email:", adminEmailErr);
+      }
     }
 
     console.log("✅ Registration completed successfully.");
     return NextResponse.json({ success: true, registration });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("❌ Registration Error:", error);
+      return NextResponse.json({ error: error.message || "Registration failed" }, { status: 500 });
+    }
     console.error("❌ Registration Error:", error);
-    return NextResponse.json({ error: error?.message || "Registration failed" }, { status: 500 });
+    return NextResponse.json({ error: "Registration failed" }, { status: 500 });
   }
 }
