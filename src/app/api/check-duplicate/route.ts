@@ -31,7 +31,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ duplicate: !!existing });
   } catch (err) {
     console.error("❌ Error in /api/check-duplicate:", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json(
+      { error: "Internal Server Error", details: message },
+      { status: 500 }
+    );
   } finally {
     await prisma.$disconnect();
   }
