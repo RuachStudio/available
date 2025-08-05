@@ -77,6 +77,20 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
         body: JSON.stringify(formData),
       });
 
+      if (res.status === 400) {
+        const data = await res.json();
+        if (data.error === "Duplicate entry" && data.field?.includes("contactPhone")) {
+          setErrorMessage("⚠️ This phone number is already registered.");
+        } else if (data.error === "Duplicate entry" && data.field?.includes("contactEmail")) {
+          setErrorMessage("⚠️ This email is already registered.");
+        } else {
+          setErrorMessage("⚠️ Duplicate entry detected.");
+        }
+        setTimeout(() => setErrorMessage(null), 4000);
+        setIsSubmitting(false);
+        return;
+      }
+
       if (!res.ok) throw new Error("Registration failed");
       const data = await res.json();
       console.log("Registration successful:", data);

@@ -11,12 +11,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Email or phone is required" }, { status: 400 });
     }
 
+    const orConditions: any[] = [];
+    if (email) {
+      orConditions.push({ contactEmail: email.toLowerCase() });
+    }
+    if (phone) {
+      orConditions.push({ contactPhone: phone });
+    }
+
     const existing = await prisma.registration.findFirst({
       where: {
-        OR: [
-          email ? { contactEmail: email.toLowerCase() } : undefined,
-          phone ? { contactPhone: phone } : undefined,
-        ].filter(Boolean),
+        OR: orConditions,
       },
     });
 
