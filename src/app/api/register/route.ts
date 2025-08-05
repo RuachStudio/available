@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 // Lazy load Prisma to avoid build-time initialization
 // import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
@@ -77,51 +78,85 @@ const buildAdminEmail = (name: string, phone: string, email: string, attendees: 
 
 export async function POST(req: Request) {
   try {
-    const { prisma } = await import('@/lib/prisma'); // runtime import
-    const { contactName, contactPhone, contactEmail, contactAddress, prayerRequest, attendees } = await req.json();
+    console.log("📥 Incoming registration request...");
+    const { prisma } = await import('@/lib/prisma'); 
+    const body = await req.json();
+    const { contactName, contactPhone, contactEmail, contactAddress, prayerRequest, attendees } = body;
 
-    const registration = await prisma.registration.create({
-      data: {
-        contactName,
-        contactPhone,
-        contactEmail,
-        contactAddress,
-        prayerRequest,
-        attendees: {
-          create: attendees.map((a: Attendee) => ({
-            name: a.name,
-            phone: a.phone,
-            email: a.email,
-            address: a.address,
-            shirtSize: a.shirtSize,
-            notes: a.notes,
-          })),
+    console.log("✅ Parsed request data:", { contactName, contactPhone, contactEmail, attendeeCount: attendees?.length });
+
+    if (!contactName || !contactPhone || !contactEmail || !attendees || attendees.length === 0) {
+      console.error("❌ Validation failed: Missing required fields.");
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    console.log("🗄 Creating registration record in database...");
+    let registration;
+    try {
+      registration = await prisma.registration.create({
+        data: {
+          contactName,
+          contactPhone,
+          contactEmail: contactEmail.toLowerCase(),
+          contactAddress,
+          prayerRequest,
+          attendees: {
+            create: (attendees as Attendee[]).map(a => ({
+              name: a.name,
+              phone: a.phone,
+              email: a.email?.toLowerCase() || null,
+              address: a.address,
+              shirtSize: a.shirtSize,
+              notes: a.notes,
+            })),
+          },
         },
-      },
-      include: { attendees: true },
-    });
-
-    if (contactEmail) {
-      await sendEmail({
-        from: `"AVAILABLE Conference" <${process.env.EMAIL_USER}>`,
-        to: contactEmail,
-        subject: "Your AVAILABLE Conference Registration is Confirmed!",
-        html: buildConfirmationEmail(contactName, attendees, prayerRequest),
+        include: { attendees: true },
       });
+    } catch (dbErr: any) {
+      if (dbErr instanceof Prisma.PrismaClientKnownRequestError && dbErr.code === "P2002") {
+        console.error("❌ Duplicate entry detected:", dbErr.meta);
+        return NextResponse.json(
+          { error: "Duplicate entry", field: dbErr.meta?.target },
+          { status: 400 }
+        );
+      }
+      console.error("❌ Prisma error while creating registration:", dbErr);
+      throw new Error(dbErr.message || "Database error during registration");
     }
 
-    if (process.env.ADMIN_EMAIL) {
-      await sendEmail({
-        from: `"AVAILABLE Conference" <${process.env.EMAIL_USER}>`,
-        to: process.env.ADMIN_EMAIL,
-        subject: "New Conference Registration Submitted",
-        html: buildAdminEmail(contactName, contactPhone, contactEmail, attendees, prayerRequest),
-      });
+    console.log("📧 Sending confirmation email...");
+    try {
+      if (contactEmail) {
+        await sendEmail({
+          from: `"AVAILABLE Conference" <${process.env.EMAIL_USER}>`,
+          to: contactEmail,
+          subject: "Your AVAILABLE Conference Registration is Confirmed!",
+          html: buildConfirmationEmail(contactName, attendees, prayerRequest),
+        });
+      }
+    } catch (emailErr) {
+      console.error("⚠️ Failed to send confirmation email:", emailErr);
     }
 
+    console.log("📧 Sending admin notification email...");
+    try {
+      if (process.env.ADMIN_EMAIL) {
+        await sendEmail({
+          from: `"AVAILABLE Conference" <${process.env.EMAIL_USER}>`,
+          to: process.env.ADMIN_EMAIL,
+          subject: "New Conference Registration Submitted",
+          html: buildAdminEmail(contactName, contactPhone, contactEmail, attendees, prayerRequest),
+        });
+      }
+    } catch (adminEmailErr) {
+      console.error("⚠️ Failed to send admin email:", adminEmailErr);
+    }
+
+    console.log("✅ Registration completed successfully.");
     return NextResponse.json({ success: true, registration });
-  } catch (error) {
-    console.error("Registration Error:", error);
-    return NextResponse.json({ error: "Registration failed" }, { status: 500 });
+  } catch (error: any) {
+    console.error("❌ Registration Error:", error);
+    return NextResponse.json({ error: error?.message || "Registration failed" }, { status: 500 });
   }
 }

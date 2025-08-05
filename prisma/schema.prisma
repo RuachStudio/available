@@ -10,8 +10,8 @@ datasource db {
 model Registration {
   id             String     @id @default(uuid())
   contactName    String
-  contactPhone   String
-  contactEmail   String?
+  contactPhone   String     @unique
+  contactEmail   String?    @unique
   contactAddress String?
   prayerRequest  String?
   createdAt      DateTime   @default(now())
@@ -21,9 +21,9 @@ model Registration {
 model Attendee {
   id             String       @id @default(uuid())
   name           String
-  phone          String
-  email          String?
-  address        String?
+  phone          String       @unique
+  email          String?      @unique
+  address        String?      
   shirtSize      String
   notes          String?
   registrationId String
@@ -32,7 +32,7 @@ model Attendee {
 
 model SpeakerPoll {
   id        Int      @id @default(autoincrement())
-  speaker   String
+  speaker   String   @unique
   votes     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

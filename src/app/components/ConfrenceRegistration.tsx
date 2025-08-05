@@ -13,6 +13,8 @@ interface ConferenceRegistrationProps {
 export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRegistrationProps) {
   const [ticketCount, setTicketCount] = useState(1);
   const [showPoll, setShowPoll] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     contactName: "",
     contactPhone: "",
@@ -43,9 +45,32 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
     setFormData({ ...formData, attendees: newAttendees });
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return; // Prevent duplicate submissions
+    setIsSubmitting(true);
+
     try {
+      // Check for duplicate email or phone before submitting
+      const duplicateCheck = await fetch("/api/check-duplicate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: formData.contactEmail,
+          phone: formData.contactPhone,
+        }),
+      });
+
+      const duplicateResult = await duplicateCheck.json();
+      if (!duplicateCheck.ok || duplicateResult.exists) {
+        setErrorMessage("⚠️ This email or phone number is already registered.");
+        setTimeout(() => setErrorMessage(null), 4000);
+        setIsSubmitting(false);
+        return;
+      }
+
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,16 +81,34 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
       const data = await res.json();
       console.log("Registration successful:", data);
 
-      alert("✅ Registration successful! A confirmation email has been sent.");
+      setSuccessMessage("✅ Registration successful! A confirmation email has been sent.");
+      setTimeout(() => setSuccessMessage(null), 4000);
       setShowPoll(true); // Show poll instead of closing modal
     } catch (error) {
       console.error("Error:", error);
-      alert("❌ There was an issue submitting your registration.");
+      setErrorMessage("❌ There was an issue submitting your registration.");
+      setTimeout(() => setErrorMessage(null), 4000);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <>
+      {successMessage && (
+        <div className="fixed top-5 inset-x-0 flex justify-center z-50">
+          <div className="bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity">
+            {successMessage}
+          </div>
+        </div>
+      )}
+      {errorMessage && (
+        <div className="fixed top-20 inset-x-0 flex justify-center z-50">
+          <div className="bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg transition-opacity">
+            {errorMessage}
+          </div>
+        </div>
+      )}
       {/* Overlay */}
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center overflow-auto">
@@ -82,7 +125,8 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
                 {/* Close Button */}
                 <button 
                   onClick={onClose} 
-                  className="absolute top-3 right-3 text-gray-500 hover:text-black text-xl"
+                  className="absolute top-3 right-3 bg-black text-white hover:bg-red-600 rounded-full w-10 h-10 flex items-center justify-center shadow-lg text-2xl transition-colors duration-300"
+                  aria-label="Close"
                 >
                   ✕
                 </button>
@@ -172,8 +216,14 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
           onChange={handleChange}
         ></textarea>
 
-        <button type="submit" className="w-full bg-black text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition">
-          Submit Registration
+        <button 
+          type="submit" 
+          className={`w-full py-3 rounded-lg font-semibold transition ${
+            isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-black text-white hover:bg-gray-800"
+          }`}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Submitting..." : "Submit Registration"}
         </button>
       </form>
               </motion.div>
@@ -189,11 +239,13 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
                 {/* Close Button */}
                 <button 
                   onClick={onClose} 
-                  className="absolute top-3 right-3 text-gray-500 hover:text-black text-xl"
+                  className="absolute top-3 right-3 bg-black text-white hover:bg-red-600 rounded-full w-10 h-10 flex items-center justify-center shadow-lg text-2xl transition-colors duration-300"
+                  aria-label="Close"
                 >
                   ✕
                 </button>
-                <Vote />
+                {/* Pass auto-close callback to Vote */}
+                <Vote onComplete={onClose} />
               </motion.div>
             )}
           </AnimatePresence>

@@ -17,11 +17,12 @@ export async function POST(req: Request) {
 
   if (!speaker) return NextResponse.json({ error: 'Speaker is required' }, { status: 400 });
 
-  await prisma.speakerPoll.updateMany({
+  await prisma.speakerPoll.upsert({
     where: { speaker },
-    data: { votes: { increment: 1 } },
+    update: { votes: { increment: 1 } },
+    create: { speaker, votes: 1 },
   });
 
-  const refreshed = await prisma.speakerPoll.findFirst({ where: { speaker } });
+  const refreshed = await prisma.speakerPoll.findUnique({ where: { speaker } });
   return NextResponse.json(refreshed);
 }

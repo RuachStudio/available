@@ -12,7 +12,11 @@ const speakerPosters = [
   { src: "/speakers/krista.webp", alt: "Apostle Krista Lathem" },
 ];
 
-export default function SpeakerPoll() {
+interface VoteProps {
+  onComplete?: () => void;
+}
+
+export default function SpeakerPoll({ onComplete }: VoteProps) {
   const [votes, setVotes] = useState<Record<string, number>>({});
   const [hasVoted, setHasVoted] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -37,6 +41,11 @@ export default function SpeakerPoll() {
     setVotes((prev) => ({ ...prev, [speaker]: (prev[speaker] || 0) + 1 }));
     setSelected(speaker);
     setHasVoted(true);
+
+    // Trigger onComplete callback to auto-close modal
+    if (onComplete) {
+      setTimeout(() => onComplete(), 800); // slight delay for animation
+    }
   };
 
   const totalVotes = Object.values(votes).reduce((sum, v) => sum + v, 0);
