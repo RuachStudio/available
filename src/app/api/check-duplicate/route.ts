@@ -1,4 +1,7 @@
 // app/api/check-duplicate/route.ts
+export const dynamic = 'force-dynamic';
+export const revalidate = 0; // Disable caching for Vercel build issues
+import 'server-only';
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
