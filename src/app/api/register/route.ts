@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+// Lazy load Prisma to avoid build-time initialization
+// import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0; // Disable caching and force runtime execution
 import 'server-only';
 
 type Attendee = {
@@ -75,6 +77,7 @@ const buildAdminEmail = (name: string, phone: string, email: string, attendees: 
 
 export async function POST(req: Request) {
   try {
+    const { prisma } = await import('@/lib/prisma'); // runtime import
     const { contactName, contactPhone, contactEmail, contactAddress, prayerRequest, attendees } = await req.json();
 
     const registration = await prisma.registration.create({
