@@ -1,4 +1,5 @@
 // app/register/page.tsx
+
 "use client";
 import ConferenceRegistration from "../components/ConferenceRegistration";
 
