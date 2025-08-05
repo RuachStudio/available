@@ -5,7 +5,8 @@ import SpeakersSection from "./components/SpeakerSection";
 import MerchSection from "./components/MerchSection";
 import TestimoniesSection from "./components/TestimoniesSection";
 import Footer from "./components/Footer";
-
+// Add at top of page.tsx using this API:
+export const dynamic = 'force-dynamic';
 export default function LandingPage() {
   return (
     <main className="bg-black text-white min-h-screen">
