@@ -1,5 +1,5 @@
 // app/register/page.tsx
-
+export const dynamic = 'force-dynamic';
 "use client";
 import ConferenceRegistration from "../components/ConferenceRegistration";
 
