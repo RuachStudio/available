@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Image from "next/image";
 import "./globals.css";
-import AutoPlayOnScrollVideoAudio from "./components/ StickyAudioButton";
+import StickyAudioButton from "./components/ StickyAudioButton";
+import DonateFloatingButton from "./components/DonateFloatingButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +30,22 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AutoPlayOnScrollVideoAudio />
+        <a
+          href="https://godscoffeecall.com"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            position: "fixed",
+            top: "10px",
+            left: "10px",
+            zIndex: 1000,
+            cursor: "pointer",
+          }}
+        >
+          <Image src="/logo/logo.png" alt="God's Coffee Call" width={60} height={60} />
+        </a>
+        <StickyAudioButton />
+        <DonateFloatingButton />
         {children}
       </body>
     </html>
