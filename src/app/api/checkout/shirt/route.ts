@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+export const runtime = "nodejs";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 // set this to your Stripe Price ID for the tee
 const TEE_PRICE_ID = process.env.STRIPE_TEE_PRICE_ID!;
@@ -31,7 +33,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ url: session.url });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Stripe session error", err);
     return NextResponse.json({ error: "Unable to create checkout session" }, { status: 500 });
   }

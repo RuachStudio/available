@@ -1,53 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// Do NOT export this
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+// Stripe uses Node APIs – not Edge:
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { amount, name, email, note } = await req.json();
+    const { shirts, contact } = await req.json();
+    // shirts: [{ size: string, attendeeName: string }]
 
-    // Validate: amount in dollars -> convert to cents
-    const dollars = Number(amount);
-    if (!Number.isFinite(dollars) || dollars <= 0) {
-      return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
-    }
-    const unitAmount = Math.round(dollars * 100);
+    // If you use one price for all sizes:
+    const priceId = process.env.STRIPE_TEE_PRICE_ID!;
+    const line_items = (shirts as Array<{ size: string; attendeeName: string }>).map(() => ({
+      price: priceId,
+      quantity: 1,
+    }));
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      // One-off dynamic amount using price_data
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            unit_amount: unitAmount,
-            product_data: {
-              name: "AVAILABLE Donation",
-              description: note ? String(note).slice(0, 250) : undefined,
-            },
-          },
-          quantity: 1,
-        },
-      ],
-      // Collect email if you want receipts
-      customer_email: email || undefined,
-      // Attach metadata for your records/webhooks
+      line_items,
       metadata: {
-        donor_name: name || "",
-        donor_email: email || "",
-        note: note || "",
-        source: "donation-form",
+        contact_name: contact?.name || "",
+        contact_email: contact?.email || "",
+        contact_phone: contact?.phone || "",
+        shirts: JSON.stringify(shirts ?? []),
+        source: "shirt-checkout",
       },
-      // Optional: allow promo codes (usually not for donations, so false)
-      allow_promotion_codes: false,
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/thank-you?donation=success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/donate?cancelled=1`,
+      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/thank-you?shirts=success`,
+      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/register?shirts=cancelled`,
     });
 
     return NextResponse.json({ url: session.url });
-  } catch (err: any) {
-    console.error("Donation checkout error:", err);
-    return NextResponse.json({ error: "Unable to create donation session" }, { status: 500 });
+  } catch (err: unknown) {
+    if (err instanceof Error) {
+      console.error("Shirt checkout error:", err.message, err.stack);
+    } else {
+      console.error("Shirt checkout error:", err);
+    }
+    return NextResponse.json({ error: "Unable to create checkout session" }, { status: 500 });
   }
 }

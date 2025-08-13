@@ -5,6 +5,27 @@ import Vote from "./Vote";
 
 const shirtSizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
+type Attendee = {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  wantsShirt: boolean;
+  shirtSize: string;
+  notes: string;
+};
+
+type RegistrationForm = {
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string;
+  contactAddress: string;
+  prayerRequest: string;
+  primaryWantsShirt: boolean;
+  primaryShirtSize: string;
+  attendees: Attendee[];
+};
+
 interface ConferenceRegistrationProps {
   isOpen: boolean;
   onClose: () => void;
@@ -15,7 +36,7 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
   const [showPoll, setShowPoll] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<RegistrationForm>({
     contactName: "",
     contactPhone: "",
     contactEmail: "",
@@ -36,19 +57,21 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
         ? target.checked
         : target.value;
     if (idx !== undefined) {
-      const updatedAttendees = [...formData.attendees];
-      updatedAttendees[idx] = { ...updatedAttendees[idx], [name]: fieldValue } as any;
+      const updatedAttendees: Attendee[] = [...formData.attendees];
+      updatedAttendees[idx] = { ...updatedAttendees[idx], [name]: fieldValue } as Attendee;
       setFormData({ ...formData, attendees: updatedAttendees });
     } else {
-      setFormData({ ...formData, [name]: fieldValue } as any);
+      setFormData({ ...formData, [name]: fieldValue } as RegistrationForm);
     }
   };
 
   const handleTicketChange = (count: number) => {
     setTicketCount(count);
-    const newAttendees = Array(count)
+    const newAttendees: Attendee[] = Array(count)
       .fill(null)
-      .map((_, i) => formData.attendees[i] || { name: "", phone: "", email: "", address: "", wantsShirt: false, shirtSize: "", notes: "" });
+      .map((_, i) =>
+        formData.attendees[i] || ({ name: "", phone: "", email: "", address: "", wantsShirt: false, shirtSize: "", notes: "" } as Attendee)
+      );
     setFormData({ ...formData, attendees: newAttendees });
   };
 
@@ -111,9 +134,9 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
       if (formData.primaryWantsShirt && formData.primaryShirtSize) {
         selectedShirts.push({ size: formData.primaryShirtSize, attendeeName: formData.contactName || "Primary" });
       }
-      formData.attendees.forEach((a) => {
-        if ((a as any).wantsShirt && (a as any).shirtSize) {
-          selectedShirts.push({ size: (a as any).shirtSize, attendeeName: a.name || "Guest" });
+      formData.attendees.forEach((a: Attendee) => {
+        if (a.wantsShirt && a.shirtSize) {
+          selectedShirts.push({ size: a.shirtSize, attendeeName: a.name || "Guest" });
         }
       });
 
