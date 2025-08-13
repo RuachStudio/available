@@ -2,9 +2,21 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
-const EVENT_DATE = new Date("2025-08-15T19:00:00-05:00");
+const EVENT_DATES = [
+  new Date("2025-10-17T18:00:00-05:00"),
+  new Date("2025-10-18T18:00:00-05:00"),
+];
 
-function getTimeLeft(target: Date) {
+function getNextEventDate(dates: Date[]) {
+  const now = Date.now();
+  for (const d of dates) {
+    if (d.getTime() > now) return d;
+  }
+  return null;
+}
+
+function getTimeLeft(target: Date | null) {
+  if (!target) return null;
   const now = new Date().getTime();
   const distance = target.getTime() - now;
 
@@ -19,13 +31,16 @@ function getTimeLeft(target: Date) {
 }
 
 export default function CountdownSection() {
-  const [timeLeft, setTimeLeft] = useState(() => getTimeLeft(EVENT_DATE));
+  const [target, setTarget] = useState<Date | null>(() => getNextEventDate(EVENT_DATES));
+  const [timeLeft, setTimeLeft] = useState(() => getTimeLeft(getNextEventDate(EVENT_DATES)));
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     const timer = setInterval(() => {
-      setTimeLeft(getTimeLeft(EVENT_DATE));
+      const next = getNextEventDate(EVENT_DATES);
+      setTarget(next);
+      setTimeLeft(getTimeLeft(next));
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -90,7 +105,14 @@ export default function CountdownSection() {
               </motion.span>
             ))}
           </div>
-          <p className="mt-6 text-lg text-gray-400">August 8th • 7PM CDT</p>
+          <p className="mt-6 text-lg text-gray-400">
+            October 17–18 • Doors Open 6PM CDT
+            {target && (
+              <span className="block text-sm text-gray-500 mt-1">
+                Counting down to {target.getDate() === 17 ? "Night 1 (Oct 17)" : "Night 2 (Oct 18)"}
+              </span>
+            )}
+          </p>
         </motion.div>
 
         {/* Right: Visual or quote */}

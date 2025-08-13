@@ -21,19 +21,26 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
     contactEmail: "",
     contactAddress: "",
     prayerRequest: "",
+    primaryWantsShirt: false,
+    primaryShirtSize: "",
     attendees: [
-      { name: "", phone: "", email: "", address: "", shirtSize: "", notes: "" },
+      { name: "", phone: "", email: "", address: "", wantsShirt: false, shirtSize: "", notes: "" },
     ],
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>, idx?: number) => {
-    const { name, value } = e.target;
+    const target = e.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+    const { name } = target;
+    const fieldValue =
+      target instanceof HTMLInputElement && target.type === "checkbox"
+        ? target.checked
+        : target.value;
     if (idx !== undefined) {
       const updatedAttendees = [...formData.attendees];
-      updatedAttendees[idx] = { ...updatedAttendees[idx], [name]: value };
+      updatedAttendees[idx] = { ...updatedAttendees[idx], [name]: fieldValue } as any;
       setFormData({ ...formData, attendees: updatedAttendees });
     } else {
-      setFormData({ ...formData, [name]: value });
+      setFormData({ ...formData, [name]: fieldValue } as any);
     }
   };
 
@@ -41,7 +48,7 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
     setTicketCount(count);
     const newAttendees = Array(count)
       .fill(null)
-      .map((_, i) => formData.attendees[i] || { name: "", phone: "", email: "", address: "", shirtSize: "", notes: "" });
+      .map((_, i) => formData.attendees[i] || { name: "", phone: "", email: "", address: "", wantsShirt: false, shirtSize: "", notes: "" });
     setFormData({ ...formData, attendees: newAttendees });
   };
 
@@ -98,6 +105,44 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
       setSuccessMessage("✅ Registration successful! A confirmation email has been sent.");
       setTimeout(() => setSuccessMessage(null), 4000);
       setShowPoll(true); // Show poll instead of closing modal
+
+      // Build shirt line items
+      const selectedShirts = [] as { size: string; attendeeName: string }[];
+      if (formData.primaryWantsShirt && formData.primaryShirtSize) {
+        selectedShirts.push({ size: formData.primaryShirtSize, attendeeName: formData.contactName || "Primary" });
+      }
+      formData.attendees.forEach((a) => {
+        if ((a as any).wantsShirt && (a as any).shirtSize) {
+          selectedShirts.push({ size: (a as any).shirtSize, attendeeName: a.name || "Guest" });
+        }
+      });
+
+      if (selectedShirts.length > 0) {
+        try {
+          const checkoutRes = await fetch("/api/checkout/shirts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              shirts: selectedShirts,
+              // include contact info for metadata
+              contact: {
+                name: formData.contactName,
+                email: formData.contactEmail,
+                phone: formData.contactPhone,
+              },
+            }),
+          });
+          const checkoutData = await checkoutRes.json();
+          if (checkoutRes.ok && checkoutData?.url) {
+            window.location.href = checkoutData.url; // Redirect to Stripe Checkout
+            return;
+          } else {
+            console.warn("Stripe session error", checkoutData);
+          }
+        } catch (err) {
+          console.error("Stripe session creation failed", err);
+        }
+      }
     } catch (error) {
       console.error("Error:", error);
       setErrorMessage("❌ There was an issue submitting your registration.");
@@ -152,26 +197,34 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
         <input name="contactEmail" type="email" placeholder="Your Email" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
         <input name="contactAddress" type="text" placeholder="Your Mailing Address (Optional)" className="w-full p-3 border rounded-lg" onChange={handleChange} />
 
-        {/* T-Shirt Size for Primary Contact */}
-        <select
-          name="primaryShirtSize"
-          required
-          className="w-full p-3 border rounded-lg"
-          onChange={(e) => 
-            setFormData({ 
-              ...formData, 
-              attendees: [
-                { ...formData.attendees[0], shirtSize: e.target.value },
-                ...formData.attendees.slice(1)
-              ]
-            })
-          }
-        >
-          <option value="">Select T-Shirt Size</option>
-          {shirtSizes.map((size) => (
-            <option key={size} value={size}>{size}</option>
-          ))}
-        </select>
+        {/* Shirt selection for Primary Contact */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              name="primaryWantsShirt"
+              checked={formData.primaryWantsShirt}
+              onChange={handleChange}
+              className="h-4 w-4"
+            />
+            <span className="font-medium">Add AVAILABLE Tee to my registration</span>
+          </label>
+          {formData.primaryWantsShirt && (
+            <select
+              name="primaryShirtSize"
+              required
+              className="w-full p-3 border rounded-lg"
+              value={formData.primaryShirtSize}
+              onChange={handleChange}
+            >
+              <option value="">Select T-Shirt Size</option>
+              {shirtSizes.map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          )}
+          <p className="text-sm text-gray-500">Shirts are optional and purchased after registration via secure checkout.</p>
+        </div>
 
         {/* Number of Tickets */}
         <div>
@@ -205,12 +258,24 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
                 <input name="phone" placeholder="Phone Number" required value={attendee.phone} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
                 <input name="email" placeholder="Email (Optional)" value={attendee.email} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
                 <input name="address" placeholder="Mailing Address (Optional)" value={attendee.address} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
-                <select name="shirtSize" required value={attendee.shirtSize} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)}>
-                  <option value="">Select T-Shirt Size</option>
-                  {shirtSizes.map((size) => (
-                    <option key={size}>{size}</option>
-                  ))}
-                </select>
+                <label className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    name="wantsShirt"
+                    checked={attendee.wantsShirt}
+                    onChange={(e) => handleChange(e, idx)}
+                    className="h-4 w-4"
+                  />
+                  <span>Add AVAILABLE Tee</span>
+                </label>
+                {attendee.wantsShirt && (
+                  <select name="shirtSize" required value={attendee.shirtSize} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)}>
+                    <option value="">Select T-Shirt Size</option>
+                    {shirtSizes.map((size) => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                )}
                 <textarea 
                   name="notes" 
                   placeholder="Special Notes (Dietary/Accessibility)" 
@@ -229,6 +294,8 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
           className="w-full p-3 border rounded-lg"
           onChange={handleChange}
         ></textarea>
+
+        <p className="text-xs text-gray-500">Note: If you add a shirt, you’ll be redirected to secure payment after submitting.</p>
 
         <button 
           type="submit" 

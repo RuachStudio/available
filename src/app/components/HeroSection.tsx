@@ -12,7 +12,7 @@ export default function HeroSection() {
           loop
           playsInline
           className="absolute inset-0 w-full h-full object-cover opacity-50"
-          src="/videos/available-trailer.mp4"
+          src="/videos/available-promo2.mp4"
         />
         <div className="relative z-10">
           <h1 className="text-5xl md:text-7xl font-bold mb-4 animate-fadeInUp">Are You AVAILABLE?</h1>
