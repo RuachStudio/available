@@ -3,7 +3,13 @@ import Stripe from "stripe";
 
 export const runtime = "nodejs";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+function getStripe() {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) {
+    throw new Error("STRIPE_SECRET_KEY is not set");
+  }
+  return new Stripe(key);
+}
 
 // set this to your Stripe Price ID for the tee
 const TEE_PRICE_ID = process.env.STRIPE_TEE_PRICE_ID!;
@@ -11,6 +17,7 @@ const TEE_PRICE_ID = process.env.STRIPE_TEE_PRICE_ID!;
 export async function POST(req: NextRequest) {
   try {
     const { shirts, contact } = await req.json();
+    const stripe = getStripe();
     // shirts: [{ size: "M", attendeeName: "Jordan" }, ...]
 
     const lineItems = shirts.map(() => ({
