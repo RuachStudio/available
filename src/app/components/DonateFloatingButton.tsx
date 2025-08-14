@@ -43,7 +43,7 @@ export default function DonateFloatingButton() {
       <div className="fixed top-4 right-4 z-50">
         <button
           onClick={() => setOpen(true)}
-          className="bg-pink-600/60 text-white rounded-full shadow-lg px-5 py-3 hover:bg-pink-600/90 transition-all"
+          className="bg-red-600/60 text-white rounded-full shadow-lg px-5 py-3 hover:bg-red-600/90 transition-all"
         >
           Donate
         </button>
@@ -72,8 +72,8 @@ export default function DonateFloatingButton() {
                   onClick={() => setAmount(amt)}
                   className={`border rounded-lg py-2 font-semibold ${
                     amount === amt
-                      ? "bg-pink-600 text-white border-pink-600"
-                      : "border-gray-300 hover:border-pink-600"
+                      ? "bg-red-600 text-white border-red-600"
+                      : "border-gray-300 hover:border-red-600"
                   }`}
                 >
                   ${amt}
@@ -100,7 +100,7 @@ export default function DonateFloatingButton() {
             <button
               onClick={handleDonate}
               disabled={loading}
-              className="w-full bg-pink-600 text-white py-2 rounded-lg font-semibold hover:bg-pink-700 transition-all"
+              className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700 transition-all"
             >
               {loading ? "Processing..." : `Donate $${amount ?? ""}`}
             </button>
