@@ -10,13 +10,22 @@ import "server-only";
 // -----------------------------
 // Types
 // -----------------------------
-type Attendee = {
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
-  shirtSize: string;
+type AttendeeIn = {
+  name?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  shirtSize?: string;
   notes?: string;
+};
+
+type AttendeeClean = {
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  notes: string | null;
+  shirtSize: ShirtSize | null;
 };
 
 // -----------------------------
@@ -26,22 +35,14 @@ function normalizeShirtSize(input?: string | null): ShirtSize | null {
   if (!input) return null;
   const v = String(input).trim().toUpperCase();
   switch (v) {
-    case "XS":
-      return ShirtSize.XS;
-    case "S":
-      return ShirtSize.S;
-    case "M":
-      return ShirtSize.M;
-    case "L":
-      return ShirtSize.L;
-    case "XL":
-      return ShirtSize.XL;
-    case "2XL":
-      return ShirtSize.E2XL;
-    case "3XL":
-      return ShirtSize.E3XL;
-    default:
-      return null;
+    case "XS": return ShirtSize.XS;
+    case "S":  return ShirtSize.S;
+    case "M":  return ShirtSize.M;
+    case "L":  return ShirtSize.L;
+    case "XL": return ShirtSize.XL;
+    case "2XL": return ShirtSize.E2XL;
+    case "3XL": return ShirtSize.E3XL;
+    default:   return null;
   }
 }
 
@@ -68,7 +69,7 @@ const sendEmail = async (options: nodemailer.SendMailOptions) => {
 
 const buildConfirmationEmail = (
   name: string,
-  attendees: Attendee[],
+  attendees: AttendeeClean[],
   prayerRequest?: string
 ) => `
   <h2>Hi ${name},</h2>
@@ -104,7 +105,7 @@ const buildAdminEmail = (
   name: string,
   phone: string,
   email: string,
-  attendees: Attendee[],
+  attendees: AttendeeClean[],
   prayerRequest?: string
 ) => `
   <h2>New Registration Received</h2>
@@ -120,7 +121,7 @@ const buildAdminEmail = (
       .map(
         (a) =>
           `<li>${a.name || "N/A"} (${a.phone || "N/A"}) - Shirt Size: ${
-            a.shirtSize || "N/A"
+            a.shirtSize ?? "N/A"
           }</li>`
       )
       .join("")}
@@ -142,7 +143,7 @@ export async function POST(req: Request) {
       contactEmail: string;
       contactAddress?: string;
       prayerRequest?: string;
-      attendees?: Attendee[];
+      attendees?: AttendeeIn[];       // additional attendees entered in the form
       primaryWantsShirt?: boolean;
       primaryShirtSize?: string;
     };
@@ -191,9 +192,7 @@ export async function POST(req: Request) {
     });
 
     if (existing) {
-      console.log(
-        "ℹ️ Existing registration found — returning idempotent success."
-      );
+      console.log("ℹ️ Existing registration found — returning idempotent success.");
       return NextResponse.json({
         success: true,
         duplicate: true,
@@ -201,9 +200,9 @@ export async function POST(req: Request) {
       });
     }
 
-    // 1) Clean incoming attendees & drop fully-empty rows
-    const cleanedAttendees = (attendees || [])
-      .map((a) => ({
+    // 1) Clean incoming attendees & keep any row with name OR email OR phone
+    let cleanedAttendees: AttendeeClean[] = (attendees || [])
+      .map((a): AttendeeClean => ({
         name: (a?.name ?? "").trim(),
         phone: cleanString(a?.phone),
         email: cleanString(a?.email?.toLowerCase() || null),
@@ -211,26 +210,28 @@ export async function POST(req: Request) {
         notes: cleanString(a?.notes),
         shirtSize: normalizeShirtSize(a?.shirtSize),
       }))
-      .filter((a) => {
-        // Consider "empty" if name, phone, and email are all absent/blank
-        const emptyName = !a.name;
-        const emptyPhone = !a.phone;
-        const emptyEmail = !a.email;
-        return !(emptyName && emptyPhone && emptyEmail);
-      });
+      .filter((a) => Boolean(a.name || a.email || a.phone));
 
-    // 2) If none remain, create a primary attendee from contact fields
-    if (cleanedAttendees.length === 0) {
-      cleanedAttendees.push({
-        name: contactName.trim(),
-        phone: cleanString(phoneClean),
-        email: cleanString(emailLc),
-        address: cleanString(contactAddress),
-        notes: null,
-        shirtSize: normalizeShirtSize(
-          primaryWantsShirt ? primaryShirtSize : null
-        ),
-      });
+    // 2) Ensure the primary contact is included as an attendee if not already
+    const primaryCandidate: AttendeeClean = {
+      name: contactName.trim(),
+      phone: cleanString(phoneClean),
+      email: cleanString(emailLc),
+      address: cleanString(contactAddress),
+      notes: null,
+      shirtSize: normalizeShirtSize(primaryWantsShirt ? primaryShirtSize : null),
+    };
+
+    const alreadyHasPrimary = cleanedAttendees.some((a) => {
+      // consider same person if any of these match (most forgiving)
+      const nameMatch = a.name && a.name.toLowerCase() === primaryCandidate.name.toLowerCase();
+      const emailMatch = a.email && primaryCandidate.email && a.email === primaryCandidate.email;
+      const phoneMatch = a.phone && primaryCandidate.phone && a.phone === primaryCandidate.phone;
+      return nameMatch || emailMatch || phoneMatch;
+    });
+
+    if (!alreadyHasPrimary) {
+      cleanedAttendees.unshift(primaryCandidate);
     }
 
     // 3) Guard: ensure at least one attendee with a name
@@ -241,6 +242,10 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
+    console.log("👥 Cleaned attendees:", cleanedAttendees.map(a => ({
+      name: a.name, email: a.email, phone: a.phone, size: a.shirtSize
+    })));
 
     // 4) Persist
     console.log("🗄 Creating registration record in database...");
@@ -287,6 +292,11 @@ export async function POST(req: Request) {
       throw new Error("Unknown database error");
     }
 
+    console.log("🧾 Created registration", {
+      id: registration.id,
+      attendees: registration.attendees.map(a => ({ id: a.id, name: a.name, size: a.shirtSize })),
+    });
+
     // 5) Emails (best-effort; failures do not block success)
     console.log("📧 Sending confirmation email...");
     try {
@@ -295,11 +305,7 @@ export async function POST(req: Request) {
           from: `"AVAILABLE Conference" <${process.env.EMAIL_USER}>`,
           to: emailLc,
           subject: "Your AVAILABLE Conference Registration is Confirmed!",
-          html: buildConfirmationEmail(
-            contactName,
-            cleanedAttendees as unknown as Attendee[],
-            prayerRequest
-          ),
+          html: buildConfirmationEmail(contactName, cleanedAttendees, prayerRequest),
         });
       }
     } catch (emailErr: unknown) {
@@ -313,13 +319,7 @@ export async function POST(req: Request) {
           from: `"AVAILABLE Conference" <${process.env.EMAIL_USER}>`,
           to: process.env.ADMIN_EMAIL,
           subject: "New Conference Registration Submitted",
-          html: buildAdminEmail(
-            contactName,
-            phoneClean,
-            emailLc,
-            cleanedAttendees as unknown as Attendee[],
-            prayerRequest
-          ),
+          html: buildAdminEmail(contactName, phoneClean, emailLc, cleanedAttendees, prayerRequest),
         });
       }
     } catch (adminEmailErr: unknown) {
