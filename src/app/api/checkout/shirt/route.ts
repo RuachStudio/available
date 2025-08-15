@@ -4,37 +4,6 @@ import Stripe from "stripe";
 
 export const runtime = "nodejs";
 
-/** Canonical base URL used in links & image fallbacks */
-function getBaseUrl(): string {
-  const fallback = "https://www.godscoffeecall.com";
-  const envBase = process.env.NEXT_PUBLIC_BASE_URL;
-  if (!envBase) return fallback;
-  try {
-    const u = new URL(envBase);
-    const host = u.hostname.toLowerCase();
-    // normalize any godscoffeecall.com variants back to the canonical host
-    if (host === "godscoffeecall.com" || host.endsWith(".godscoffeecall.com")) {
-      return fallback;
-    }
-    return u.origin;
-  } catch {
-    return fallback;
-  }
-}
-
-/** Public, absolute image URL for Stripe to fetch */
-function getImageUrl(baseUrl: string): string {
-  const envUrl = process.env.STRIPE_TEE_IMAGE_URL;
-  const fallback = `${baseUrl}/images/available-tee.png`;
-  const candidate = envUrl && /^https?:\/\//i.test(envUrl) ? envUrl : fallback;
-  try {
-    new URL(candidate); // validate absolute URL
-    return candidate;
-  } catch {
-    return fallback;
-  }
-}
-
 /** Normalize a size string into XS/S/M/L/XL/2XL/3XL; otherwise null */
 function normalizeSize(x?: string | null): string | null {
   if (!x) return null;
@@ -53,6 +22,67 @@ function normalizeSize(x?: string | null): string | null {
   }
 }
 
+function getStripe(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
+  return new Stripe(key);
+}
+
+/** Prefer env; else infer from request headers; never return localhost in prod. */
+function getBaseUrl(req: NextRequest): string {
+  const canonical = "https://www.godscoffeecall.com";
+  const envBase = process.env.NEXT_PUBLIC_BASE_URL;
+  const isProd =
+    process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
+
+  // 1) Env (if valid and not localhost in prod)
+  if (envBase) {
+    try {
+      const u = new URL(envBase);
+      const host = u.hostname.toLowerCase();
+      const isLocal = host === "localhost" || host === "127.0.0.1";
+      // Normalize any *.godscoffeecall.com to canonical
+      if (host === "godscoffeecall.com" || host.endsWith(".godscoffeecall.com")) {
+        return canonical;
+      }
+      if (!(isProd && isLocal)) return u.origin;
+    } catch {
+      /* fall through */
+    }
+  }
+
+  // 2) Infer from request headers
+  const host =
+    req.headers.get("x-forwarded-host") ||
+    req.headers.get("host") ||
+    "www.godscoffeecall.com";
+  const proto = req.headers.get("x-forwarded-proto") || "https";
+  try {
+    const origin = `${proto}://${host}`;
+    const u = new URL(origin);
+    const isLocal = u.hostname === "localhost" || u.hostname === "127.0.0.1";
+    if (!(isProd && isLocal)) return u.origin;
+  } catch {
+    /* fall through */
+  }
+
+  // 3) Canonical fallback
+  return canonical;
+}
+
+/** Public, absolute image URL for Stripe to fetch */
+function getImageUrl(baseUrl: string): string {
+  const envUrl = process.env.STRIPE_TEE_IMAGE_URL;
+  const fallback = `${baseUrl}/images/available-tee.png`;
+  const candidate = envUrl && /^https?:\/\//i.test(envUrl) ? envUrl : fallback;
+  try {
+    new URL(candidate); // validate absolute URL
+    return candidate;
+  } catch {
+    return fallback;
+  }
+}
+
 // Optional: if you later choose to maintain a price per size in Stripe,
 // set STRIPE_PRICE_ID_XS, STRIPE_PRICE_ID_S, ... in env and this map will be used.
 const PRICE_BY_SIZE: Partial<Record<string, string>> = {
@@ -64,6 +94,10 @@ const PRICE_BY_SIZE: Partial<Record<string, string>> = {
   "2XL": process.env.STRIPE_PRICE_ID_2XL,
   "3XL": process.env.STRIPE_PRICE_ID_3XL,
 };
+
+function hasAnySizePriceIds(): boolean {
+  return Object.values(PRICE_BY_SIZE).some(Boolean);
+}
 
 // Either use one saved price (no size in the name) or inline price_data per size.
 const TEE_PRICE_ID = process.env.STRIPE_TEE_PRICE_ID;        // e.g. "price_..."
@@ -120,7 +154,7 @@ export async function POST(req: NextRequest) {
   }
 
   const stripe = getStripe();
-  const baseUrl = getBaseUrl();
+  const baseUrl = getBaseUrl(req);
   const imageUrl = getImageUrl(baseUrl);
 
   const unitAmount =
@@ -209,14 +243,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-function getStripe() {
-  const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
-  return new Stripe(key);
-}
-
-function hasAnySizePriceIds(): boolean {
-  return Object.values(PRICE_BY_SIZE).some(Boolean);
 }

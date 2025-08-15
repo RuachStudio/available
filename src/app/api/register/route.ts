@@ -4,7 +4,7 @@ import { Prisma, ShirtSize } from "@prisma/client";
 import nodemailer from "nodemailer";
 
 export const dynamic = "force-dynamic";
-export const revalidate = 0; // Disable caching and force runtime execution
+export const revalidate = 0;
 import "server-only";
 
 // -----------------------------
@@ -143,7 +143,7 @@ export async function POST(req: Request) {
       contactEmail: string;
       contactAddress?: string;
       prayerRequest?: string;
-      attendees?: AttendeeIn[];       // additional attendees entered in the form
+      attendees?: AttendeeIn[];
       primaryWantsShirt?: boolean;
       primaryShirtSize?: string;
     };
@@ -183,20 +183,19 @@ export async function POST(req: Request) {
     const emailLc = contactEmail.trim().toLowerCase();
     const phoneClean = contactPhone.trim();
 
-    // Idempotency / Duplicate pre-check (email OR phone)
+    // Duplicate pre-check (email OR phone) → graceful OK response
     const existing = await prisma.registration.findFirst({
-      where: {
-        OR: [{ contactEmail: emailLc }, { contactPhone: phoneClean }],
-      },
-      include: { attendees: true },
+      where: { OR: [{ contactEmail: emailLc }, { contactPhone: phoneClean }] },
+      select: { id: true },
     });
 
     if (existing) {
-      console.log("ℹ️ Existing registration found — returning idempotent success.");
+      console.log("ℹ️ Duplicate registration; returning graceful success.");
       return NextResponse.json({
         success: true,
         duplicate: true,
-        registration: existing,
+        registrationId: existing.id,
+        message: "You’re already registered.",
       });
     }
 
@@ -223,7 +222,6 @@ export async function POST(req: Request) {
     };
 
     const alreadyHasPrimary = cleanedAttendees.some((a) => {
-      // consider same person if any of these match (most forgiving)
       const nameMatch = a.name && a.name.toLowerCase() === primaryCandidate.name.toLowerCase();
       const emailMatch = a.email && primaryCandidate.email && a.email === primaryCandidate.email;
       const phoneMatch = a.phone && primaryCandidate.phone && a.phone === primaryCandidate.phone;
@@ -279,11 +277,12 @@ export async function POST(req: Request) {
         dbErr instanceof Prisma.PrismaClientKnownRequestError &&
         dbErr.code === "P2002"
       ) {
-        console.error("❌ Duplicate entry detected:", dbErr.meta);
-        return NextResponse.json(
-          { error: "Already registered", duplicate: true, field: dbErr.meta?.target },
-          { status: 409 }
-        );
+        console.error("ℹ️ Duplicate via unique constraint:", dbErr.meta);
+        return NextResponse.json({
+          success: true,
+          duplicate: true,
+          message: "You’re already registered.",
+        });
       }
       if (dbErr instanceof Error) {
         console.error("❌ Prisma error while creating registration:", dbErr);
