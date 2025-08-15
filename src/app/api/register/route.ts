@@ -101,22 +101,74 @@ const buildAdminEmail = (name: string, phone: string, email: string, attendees: 
 export async function POST(req: Request) {
   try {
     console.log("📥 Incoming registration request...");
-    const { prisma } = await import('@/lib/prisma'); 
-    const body: {
+    const { prisma } = await import('@/lib/prisma');
+
+    const body = await req.json() as {
       contactName: string;
       contactPhone: string;
       contactEmail: string;
       contactAddress?: string;
       prayerRequest?: string;
-      attendees: Attendee[];
-    } = await req.json();
-    const { contactName, contactPhone, contactEmail, contactAddress, prayerRequest, attendees } = body;
+      attendees?: Attendee[];
+      primaryWantsShirt?: boolean;
+      primaryShirtSize?: string;
+    };
 
-    console.log("✅ Parsed request data:", { contactName, contactPhone, contactEmail, attendeeCount: attendees?.length });
+    const {
+      contactName,
+      contactPhone,
+      contactEmail,
+      contactAddress,
+      prayerRequest,
+      attendees = [],
+      primaryWantsShirt,
+      primaryShirtSize,
+    } = body;
 
-    if (!contactName || !contactPhone || !contactEmail || !attendees || attendees.length === 0) {
-      console.error("❌ Validation failed: Missing required fields.");
+    console.log("✅ Parsed request data:", {
+      contactName, contactPhone, contactEmail, attendeeCount: attendees?.length
+    });
+
+    // Basic required fields
+    if (!contactName || !contactPhone || !contactEmail) {
+      console.error("❌ Validation failed: Missing required contact fields.");
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // 1) Clean incoming attendees & drop fully-empty rows
+    const cleanedAttendees = attendees
+      .map((a) => ({
+        name: (a?.name ?? "").trim(),
+        phone: cleanString(a?.phone),
+        email: cleanString(a?.email?.toLowerCase() || null),
+        address: cleanString(a?.address),
+        notes: cleanString(a?.notes),
+        shirtSize: normalizeShirtSize(a?.shirtSize),
+      }))
+      .filter((a) => {
+        // "empty" if all primary identifiers are missing
+        const emptyName = !a.name;
+        const emptyPhone = !a.phone;
+        const emptyEmail = !a.email;
+        return !(emptyName && emptyPhone && emptyEmail);
+      });
+
+    // 2) If none remain, create a primary attendee from contact fields
+    if (cleanedAttendees.length === 0) {
+      cleanedAttendees.push({
+        name: contactName.trim(),
+        phone: cleanString(contactPhone),
+        email: cleanString(contactEmail.toLowerCase()),
+        address: cleanString(contactAddress),
+        notes: null,
+        shirtSize: normalizeShirtSize(primaryWantsShirt ? primaryShirtSize : null),
+      });
+    }
+
+    // 3) Guard: ensure at least one attendee with a name
+    if (cleanedAttendees.length === 0 || !cleanedAttendees[0].name) {
+      console.error("❌ Validation failed: No valid attendees.");
+      return NextResponse.json({ error: "At least one attendee is required" }, { status: 400 });
     }
 
     console.log("🗄 Creating registration record in database...");
@@ -130,16 +182,15 @@ export async function POST(req: Request) {
           contactAddress,
           prayerRequest,
           attendees: {
-            create: (attendees as Attendee[]).map(a => {
-              const size = normalizeShirtSize(a?.shirtSize);
+            create: cleanedAttendees.map((a) => {
               const base: Prisma.AttendeeCreateWithoutRegistrationInput = {
-                name: (a?.name ?? "").trim(),
-                phone: cleanString(a?.phone),
-                email: cleanString(a?.email?.toLowerCase() || null),
-                address: cleanString(a?.address),
-                notes: cleanString(a?.notes),
+                name: a.name,
+                phone: a.phone,
+                email: a.email,
+                address: a.address,
+                notes: a.notes,
               };
-              if (size) base.shirtSize = size; // only include if valid
+              if (a.shirtSize) base.shirtSize = a.shirtSize;
               return base;
             }),
           },
@@ -147,10 +198,7 @@ export async function POST(req: Request) {
         include: { attendees: true },
       });
     } catch (dbErr: unknown) {
-      if (
-        dbErr instanceof Prisma.PrismaClientKnownRequestError &&
-        dbErr.code === "P2002"
-      ) {
+      if (dbErr instanceof Prisma.PrismaClientKnownRequestError && dbErr.code === "P2002") {
         console.error("❌ Duplicate entry detected:", dbErr.meta);
         return NextResponse.json(
           { error: "Duplicate entry", field: dbErr.meta?.target },
@@ -171,15 +219,11 @@ export async function POST(req: Request) {
           from: `"AVAILABLE Conference" <${process.env.EMAIL_USER}>`,
           to: contactEmail,
           subject: "Your AVAILABLE Conference Registration is Confirmed!",
-          html: buildConfirmationEmail(contactName, attendees, prayerRequest),
+          html: buildConfirmationEmail(contactName, cleanedAttendees as Attendee[], prayerRequest),
         });
       }
     } catch (emailErr: unknown) {
-      if (emailErr instanceof Error) {
-        console.error("⚠️ Failed to send confirmation email:", emailErr);
-      } else {
-        console.error("⚠️ Failed to send confirmation email:", emailErr);
-      }
+      console.error("⚠️ Failed to send confirmation email:", emailErr);
     }
 
     console.log("📧 Sending admin notification email...");
@@ -189,15 +233,17 @@ export async function POST(req: Request) {
           from: `"AVAILABLE Conference" <${process.env.EMAIL_USER}>`,
           to: process.env.ADMIN_EMAIL,
           subject: "New Conference Registration Submitted",
-          html: buildAdminEmail(contactName, contactPhone, contactEmail, attendees, prayerRequest),
+          html: buildAdminEmail(
+            contactName,
+            contactPhone,
+            contactEmail,
+            cleanedAttendees as Attendee[],
+            prayerRequest
+          ),
         });
       }
     } catch (adminEmailErr: unknown) {
-      if (adminEmailErr instanceof Error) {
-        console.error("⚠️ Failed to send admin email:", adminEmailErr);
-      } else {
-        console.error("⚠️ Failed to send admin email:", adminEmailErr);
-      }
+      console.error("⚠️ Failed to send admin email:", adminEmailErr);
     }
 
     console.log("✅ Registration completed successfully.");
