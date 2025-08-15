@@ -3,7 +3,7 @@ import Stripe from "stripe";
 
 export const runtime = "nodejs";
 
-function getBaseUrl(req: NextRequest): string {
+function getBaseUrl(): string {
   const fallback = "https://www.godscoffeecall.com";
   const envBase = process.env.NEXT_PUBLIC_BASE_URL;
   if (!envBase) return fallback;
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   const looksLikePriceId = TEE_PRICE_ID?.startsWith("price_") ?? false;
   const unitAmount = Number.isFinite(Number(TEE_PRICE_CENTS)) ? Number(TEE_PRICE_CENTS) : 2500; // $25 default
 
-  const baseUrl = getBaseUrl(req);
+  const baseUrl = getBaseUrl();
   const productData: { name: string; description: string; images: string[] } = {
     name: "AVAILABLE Tee",
     description: "Declare it. Wear it.",
