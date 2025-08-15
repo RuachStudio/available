@@ -83,7 +83,7 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
     setIsSubmitting(true);
 
     try {
-      // Check for duplicate email or phone before submitting
+      // 1) Duplicate check with robust handling
       const duplicateCheck = await fetch("/api/check-duplicate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -93,46 +93,91 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
         }),
       });
 
-      const duplicateResult = await duplicateCheck.json();
-      if (!duplicateCheck.ok || duplicateResult.exists) {
+      const dupCT = duplicateCheck.headers.get("content-type") || "";
+      let duplicateResult: any = null;
+      if (dupCT.includes("application/json")) {
+        duplicateResult = await duplicateCheck.json().catch(() => null);
+      }
+      if (!duplicateCheck.ok) {
+        const body = dupCT.includes("application/json")
+          ? duplicateResult || {}
+          : await duplicateCheck.text().catch(() => "");
+        console.error("/api/check-duplicate failed:", {
+          status: duplicateCheck.status,
+          statusText: duplicateCheck.statusText,
+          body,
+        });
+        setErrorMessage("⚠️ Unable to validate duplicates. Please try again.");
+        setTimeout(() => setErrorMessage(null), 4000);
+        setIsSubmitting(false);
+        return;
+      }
+      if (duplicateResult?.exists) {
         setErrorMessage("⚠️ This email or phone number is already registered.");
         setTimeout(() => setErrorMessage(null), 4000);
         setIsSubmitting(false);
         return;
       }
 
+      // 2) Submit registration (robust)
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
       });
 
-      if (res.status === 400) {
-        const data = await res.json();
-        if (data.error === "Duplicate entry" && data.field?.includes("contactPhone")) {
+      const regCT = res.headers.get("content-type") || "";
+      let regData: any = null;
+
+      if (!res.ok) {
+        const body = regCT.includes("application/json")
+          ? await res.json().catch(() => ({}))
+          : await res.text().catch(() => "");
+        console.error("Registration failed:", {
+          status: res.status,
+          statusText: res.statusText,
+          body,
+        });
+        if (
+          regCT.includes("application/json") &&
+          (body as any)?.error === "Duplicate entry" &&
+          (body as any)?.field?.includes("contactPhone")
+        ) {
           setErrorMessage("⚠️ This phone number is already registered.");
-        } else if (data.error === "Duplicate entry" && data.field?.includes("contactEmail")) {
+        } else if (
+          regCT.includes("application/json") &&
+          (body as any)?.error === "Duplicate entry" &&
+          (body as any)?.field?.includes("contactEmail")
+        ) {
           setErrorMessage("⚠️ This email is already registered.");
         } else {
-          setErrorMessage("⚠️ Duplicate entry detected.");
+          setErrorMessage("❌ Registration failed. Please try again.");
         }
         setTimeout(() => setErrorMessage(null), 4000);
         setIsSubmitting(false);
         return;
       }
 
-      if (!res.ok) throw new Error("Registration failed");
-      const data = await res.json();
-      console.log("Registration successful:", data);
+      if (regCT.includes("application/json")) {
+        regData = await res.json().catch(() => null);
+      } else {
+        // Unexpected content-type
+        const text = await res.text().catch(() => "");
+        console.error("Expected JSON from /api/register, received:", text.slice(0, 500));
+      }
 
+      console.log("Registration successful:", regData);
       setSuccessMessage("✅ Registration successful! A confirmation email has been sent.");
       setTimeout(() => setSuccessMessage(null), 4000);
       setShowPoll(true); // Show poll instead of closing modal
 
-      // Build shirt line items
-      const selectedShirts = [] as { size: string; attendeeName: string }[];
+      // 3) Build shirt line items
+      const selectedShirts: { size: string; attendeeName: string }[] = [];
       if (formData.primaryWantsShirt && formData.primaryShirtSize) {
-        selectedShirts.push({ size: formData.primaryShirtSize, attendeeName: formData.contactName || "Primary" });
+        selectedShirts.push({
+          size: formData.primaryShirtSize,
+          attendeeName: formData.contactName || "Primary",
+        });
       }
       formData.attendees.forEach((a: Attendee) => {
         if (a.wantsShirt && a.shirtSize) {
@@ -142,12 +187,12 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
 
       if (selectedShirts.length > 0) {
         try {
-          const checkoutRes = await fetch("/api/checkout/shirts", {
+          // Use the singular route we implemented
+          const checkoutRes = await fetch("/api/checkout/shirt", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               shirts: selectedShirts,
-              // include contact info for metadata
               contact: {
                 name: formData.contactName,
                 email: formData.contactEmail,
@@ -155,12 +200,28 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
               },
             }),
           });
-          const checkoutData = await checkoutRes.json();
-          if (checkoutRes.ok && checkoutData?.url) {
-            window.location.href = checkoutData.url; // Redirect to Stripe Checkout
-            return;
+
+          const coCT = checkoutRes.headers.get("content-type") || "";
+          if (!checkoutRes.ok) {
+            const body = coCT.includes("application/json")
+              ? await checkoutRes.json().catch(() => ({}))
+              : await checkoutRes.text().catch(() => "");
+            console.warn("Stripe session error:", {
+              status: checkoutRes.status,
+              statusText: checkoutRes.statusText,
+              body,
+            });
+          } else if (!coCT.includes("application/json")) {
+            const text = await checkoutRes.text().catch(() => "");
+            console.error("Expected JSON from /api/checkout/shirt, received:", text.slice(0, 500));
           } else {
-            console.warn("Stripe session error", checkoutData);
+            const checkoutData = await checkoutRes.json().catch(() => null);
+            if (checkoutData?.url) {
+              window.location.href = checkoutData.url; // Redirect to Stripe Checkout
+              return;
+            } else {
+              console.warn("Stripe session response missing URL:", checkoutData);
+            }
           }
         } catch (err) {
           console.error("Stripe session creation failed", err);

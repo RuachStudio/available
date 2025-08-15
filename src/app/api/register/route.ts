@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { Prisma, ShirtSize } from "@prisma/client";
 // Lazy load Prisma to avoid build-time initialization
 // import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
@@ -15,6 +15,28 @@ type Attendee = {
   address: string;
   shirtSize: string;
   notes?: string;
+};
+
+// Map incoming shirt size strings to Prisma enum; return null if invalid/empty
+function normalizeShirtSize(input?: string | null): ShirtSize | null {
+  if (!input) return null;
+  const v = String(input).trim().toUpperCase();
+  switch (v) {
+    case "XS": return ShirtSize.XS;
+    case "S": return ShirtSize.S;
+    case "M": return ShirtSize.M;
+    case "L": return ShirtSize.L;
+    case "XL": return ShirtSize.XL;
+    case "2XL": return ShirtSize.E2XL;
+    case "3XL": return ShirtSize.E3XL;
+    default: return null;
+  }
+}
+
+const cleanString = (val?: string | null) => {
+  if (typeof val !== "string") return null;
+  const t = val.trim();
+  return t.length ? t : null;
 };
 
 const createTransporter = () => {
@@ -101,14 +123,18 @@ export async function POST(req: Request) {
           contactAddress,
           prayerRequest,
           attendees: {
-            create: (attendees as Attendee[]).map(a => ({
-              name: a.name,
-              phone: a.phone,
-              email: a.email?.toLowerCase() || null,
-              address: a.address,
-              shirtSize: a.shirtSize,
-              notes: a.notes,
-            })),
+            create: (attendees as Attendee[]).map(a => {
+              const size = normalizeShirtSize(a?.shirtSize);
+              const base: any = {
+                name: (a?.name ?? "").trim(),
+                phone: cleanString(a?.phone),
+                email: cleanString(a?.email?.toLowerCase() || null),
+                address: cleanString(a?.address),
+                notes: cleanString(a?.notes),
+              };
+              if (size) base.shirtSize = size; // only include if valid
+              return base;
+            }),
           },
         },
         include: { attendees: true },

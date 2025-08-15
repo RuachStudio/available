@@ -10,7 +10,7 @@ type PromoVideo = {
 const promoVideos: PromoVideo[] = [
   { id: "1", videoUrl: "/videos/available_promo.mp4" },
   { id: "2", videoUrl: "/videos/available-promo2.mp4" },
-  { id: "3", videoUrl: "/videos/available_promo3.mp4" },
+  { id: "3", videoUrl: "https://www.youtube.com/@GodsCoffeeCall24" },
 ];
 
 export default function PromoVideosSection() {

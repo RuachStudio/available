@@ -3,31 +3,60 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")  // pooled (6543) for Prisma Client/runtime
+  directUrl = env("DIRECT_URL")    // direct (5432) for Prisma migrate/Studio
 }
 
+// --- Enums ---
+// Use an enum for shirt sizes; map 2XL/3XL to valid identifiers
+enum ShirtSize {
+  XS
+  S
+  M
+  L
+  XL
+  E2XL @map("2XL")
+  E3XL @map("3XL")
+}
+
+// --- Models ---
 model Registration {
-  id             String     @id @default(uuid())
-  contactName    String
-  contactPhone   String     @unique
-  contactEmail   String?    @unique
-  contactAddress String?
-  prayerRequest  String?
-  createdAt      DateTime   @default(now())
-  attendees      Attendee[]
+  id               String     @id @default(uuid())
+  contactName      String
+  contactPhone     String?    @unique
+  contactEmail     String?    @unique
+  contactAddress   String?
+  prayerRequest    String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  // Primary contact optional shirt
+  primaryWantsShirt Boolean    @default(false)
+  primaryShirtSize   ShirtSize?
+
+  attendees        Attendee[]
+
+  @@index([contactEmail])
+  @@index([contactPhone])
 }
 
 model Attendee {
   id             String       @id @default(uuid())
   name           String
-  phone          String       @unique
+  phone          String?      @unique
   email          String?      @unique
-  address        String?      
-  shirtSize      String
+  address        String?
+
+  // Optional shirt per attendee
+  wantsShirt     Boolean      @default(false)
+  shirtSize      ShirtSize?
+
   notes          String?
   registrationId String
   registration   Registration @relation(fields: [registrationId], references: [id])
+
+  @@index([registrationId])
 }
 
 model SpeakerPoll {

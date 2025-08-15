@@ -22,15 +22,41 @@ export default function DonateFloatingButton() {
         body: JSON.stringify({ amount }),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") || "";
+
+      if (!res.ok) {
+        const body = contentType.includes("application/json")
+          ? await res.json().catch(() => ({}))
+          : await res.text().catch(() => "");
+        console.error("Donation checkout failed:", {
+          status: res.status,
+          statusText: res.statusText,
+          body,
+        });
+        alert(
+          `Donation failed (${res.status}). ` +
+            (typeof body === "string" && body ? body.slice(0, 200) : "Please try again.")
+        );
+        return;
+      }
+
+      if (!contentType.includes("application/json")) {
+        const text = await res.text().catch(() => "");
+        console.error("Expected JSON, received:", text.slice(0, 500));
+        alert("Unexpected response from server. Please try again.");
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+
       if (data?.url) {
         window.location.href = data.url;
       } else {
-        console.error("Donation error:", data);
+        console.error("Donation error: No URL in response:", data);
         alert("Unable to start donation process.");
       }
     } catch (err) {
-      console.error(err);
+      console.error("Donation request error:", err);
       alert("Something went wrong starting the donation process.");
     } finally {
       setLoading(false);
