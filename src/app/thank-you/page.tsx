@@ -1,29 +1,59 @@
 "use client";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import Link from "next/link";
 import Vote from "@/app/components/Vote";
 
-export default function ThankYouPage() {
+function PollOverlay({
+  onClose,
+  onComplete,
+}: {
+  onClose: () => void;
+  onComplete: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl relative">
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 bg-black text-white hover:bg-red-600 rounded-full w-10 h-10 flex items-center justify-center shadow-lg text-2xl transition-colors duration-300"
+          aria-label="Close"
+        >
+          ✕
+        </button>
+        <div className="p-6">
+          <Vote onComplete={onComplete} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ThankYouContent() {
   const params = useSearchParams();
   const [showPoll, setShowPoll] = useState(false);
 
   useEffect(() => {
     const wantsPoll = params.get("poll") === "1";
     const alreadyDone =
-      typeof window !== "undefined" && localStorage.getItem("gcc_poll_done") === "1";
-    if (wantsPoll && !alreadyDone) {
-      setShowPoll(true);
-    }
+      typeof window !== "undefined" &&
+      localStorage.getItem("gcc_poll_done") === "1";
+    if (wantsPoll && !alreadyDone) setShowPoll(true);
   }, [params]);
 
   const handlePollComplete = () => {
     try {
       localStorage.setItem("gcc_poll_done", "1");
-    } catch {}
+    } catch {
+      // ignore storage errors
+    }
     setShowPoll(false);
   };
 
-  const status = params.get("checkout") || params.get("register");
+  const status = useMemo(
+    () => params.get("checkout") || params.get("register"),
+    [params]
+  );
 
   return (
     <main className="min-h-screen flex items-center justify-center px-6 py-16">
@@ -37,31 +67,41 @@ export default function ThankYouPage() {
             : "We appreciate your support and registration."}
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <a href="/" className="px-5 py-3 rounded bg-red-600 text-white hover:bg-red-700">
+          <Link
+            href="/"
+            className="px-5 py-3 rounded bg-red-600 text-white hover:bg-red-700"
+          >
             Back to Home
-          </a>
-          <a href="/register" className="px-5 py-3 rounded border border-gray-300 hover:bg-gray-100">
+          </Link>
+          <Link
+            href="/register"
+            className="px-5 py-3 rounded border border-gray-300 hover:bg-gray-100"
+          >
             Reserve My Spot
-          </a>
+          </Link>
         </div>
       </div>
 
       {showPoll && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl relative">
-            <button
-              onClick={() => setShowPoll(false)}
-              className="absolute top-3 right-3 bg-black text-white hover:bg-red-600 rounded-full w-10 h-10 flex items-center justify-center shadow-lg text-2xl transition-colors duration-300"
-              aria-label="Close"
-            >
-              ✕
-            </button>
-            <div className="p-6">
-              <Vote onComplete={handlePollComplete} />
-            </div>
-          </div>
-        </div>
+        <PollOverlay
+          onClose={() => setShowPoll(false)}
+          onComplete={handlePollComplete}
+        />
       )}
     </main>
+  );
+}
+
+export default function ThankYouPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-center">
+          <span className="inline-block animate-pulse">Loading…</span>
+        </div>
+      }
+    >
+      <ThankYouContent />
+    </Suspense>
   );
 }
