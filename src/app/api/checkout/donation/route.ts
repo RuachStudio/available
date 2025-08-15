@@ -3,30 +3,61 @@ import Stripe from "stripe";
 
 // Force Node runtime (Stripe requires Node APIs)
 export const runtime = "nodejs";
-// (Stripe UI hint) we'll use submit_type: 'donate' in the session
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
+  // Use default API version bundled with the library to avoid type pin mismatches
   return new Stripe(key);
+}
+
+function getBaseUrl(req: NextRequest): string {
+  const origin = new URL(req.url).origin;
+  const envBase = process.env.NEXT_PUBLIC_BASE_URL || "https://www.godscoffeecall.com";
+
+  // Fallback to godscoffeecall.com if unset, placeholder, or invalid
+  try {
+    const u = new URL(envBase);
+    const host = u.hostname.toLowerCase();
+    if (host === "godscoffeecall.com" || host.endsWith(".godscoffeecall.com")) {
+      return u.origin; // normalize
+    }
+    return "https://www.godscoffeecall.com";
+  } catch {
+    return "https://www.godscoffeecall.com";
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { amount, name, email, note } = await req.json();
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? new URL(req.url).origin;
+    // Parse JSON safely
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
 
-    const dollars = Number(amount);
+    const { amount, name, email, note } =
+      (body ?? {}) as { amount?: unknown; name?: string; email?: string; note?: string };
+
+    // Amount validation (accept string or number, dollars → cents)
+    const dollars = typeof amount === "string" ? Number(amount) : Number(amount);
     if (!Number.isFinite(dollars) || dollars <= 0) {
       return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
     }
+    // $1 .. $100k
+    const clamped = Math.min(Math.max(dollars, 1), 100000);
+    const unitAmount = Math.round(clamped * 100);
 
     const stripe = getStripe();
-    const unitAmount = Math.round(Math.min(Math.max(dollars, 1), 100000) * 100); // $1 to $100k
+    const baseUrl = getBaseUrl(req);
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       submit_type: "donate",
+      // Offer a few common options; Stripe will filter by account capability
+      payment_method_types: ["card", "link", "cashapp"],
       billing_address_collection: "auto",
       line_items: [
         {
@@ -48,14 +79,16 @@ export async function POST(req: NextRequest) {
         note: note || "",
         source: "donation-form",
       },
-      success_url: `${baseUrl}/thank-you?donation=success`,
-      cancel_url: `${baseUrl}/donate?cancelled=1`,
+      // Use the same param key your Thank You page already reads (`checkout`)
+      success_url: `${baseUrl}/thank-you?checkout=success&poll=1`,
+      cancel_url: `${baseUrl}/?checkout=cancel`,
     });
 
     return NextResponse.json({ url: session.url });
-  } catch (err: unknown) {
+  } catch (err) {
+    // Log compact but useful info; don't leak internals to the client
     if (err instanceof Error) {
-      console.error("Donation checkout error:", err.message, err.stack);
+      console.error("Donation checkout error:", err.message);
     } else {
       console.error("Donation checkout error:", err);
     }
