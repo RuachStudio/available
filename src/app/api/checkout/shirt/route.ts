@@ -4,6 +4,7 @@ import Stripe from "stripe";
 
 export const runtime = "nodejs";
 
+/** Canonical base URL used in links & image fallbacks */
 function getBaseUrl(): string {
   const fallback = "https://www.godscoffeecall.com";
   const envBase = process.env.NEXT_PUBLIC_BASE_URL;
@@ -11,7 +12,7 @@ function getBaseUrl(): string {
   try {
     const u = new URL(envBase);
     const host = u.hostname.toLowerCase();
-    // Normalize any godscoffeecall.com variants back to the canonical host
+    // normalize any godscoffeecall.com variants back to the canonical host
     if (host === "godscoffeecall.com" || host.endsWith(".godscoffeecall.com")) {
       return fallback;
     }
@@ -21,12 +22,7 @@ function getBaseUrl(): string {
   }
 }
 
-/**
- * Build an absolute, publicly reachable image URL for Stripe Checkout.
- * Priority:
- *  1) STRIPE_TEE_IMAGE_URL (must be absolute http/https)
- *  2) /images/available-tee.png on the canonical host
- */
+/** Public, absolute image URL for Stripe to fetch */
 function getImageUrl(baseUrl: string): string {
   const envUrl = process.env.STRIPE_TEE_IMAGE_URL;
   const fallback = `${baseUrl}/images/available-tee.png`;
@@ -36,6 +32,24 @@ function getImageUrl(baseUrl: string): string {
     return candidate;
   } catch {
     return fallback;
+  }
+}
+
+/** Normalize a size string into XS/S/M/L/XL/2XL/3XL; otherwise null */
+function normalizeSize(x?: string | null): string | null {
+  if (!x) return null;
+  const v = String(x).trim().toUpperCase();
+  switch (v) {
+    case "XS":
+    case "S":
+    case "M":
+    case "L":
+    case "XL":
+    case "2XL":
+    case "3XL":
+      return v;
+    default:
+      return null;
   }
 }
 
@@ -51,23 +65,43 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let shirts = [{ size: "M", attendeeName: "Jordan" }];
-  let contact: { name?: string; email?: string; phone?: string } = {};
+  // Expected payload from your registration flow
+  type Shirt = { size?: string; attendeeName?: string };
+  type Contact = { name?: string; email?: string; phone?: string };
+
+  let shirts: Shirt[] = [];
+  let contact: Contact = {};
+  let registrationId: string | undefined;
+  let primaryShirtSize: string | undefined;
 
   try {
     const body = await req.json();
-    shirts = body.shirts ?? [{ size: "M", attendeeName: "Jordan" }];
-    contact = body.contact ?? {};
+    shirts = Array.isArray(body?.shirts) ? body.shirts : [];
+    contact = body?.contact ?? {};
+    registrationId = body?.registrationId;
+    primaryShirtSize = body?.primaryShirtSize;
   } catch {
-    // if JSON parsing fails, default to one shirt
-    shirts = [{ size: "M", attendeeName: "Jordan" }];
-    contact = {};
+    // ignore parse errors; we’ll default below
   }
 
+  // If no explicit shirts array was sent, derive from primaryShirtSize (picked during registration)
+  if (shirts.length === 0) {
+    const n = normalizeSize(primaryShirtSize) ?? "M";
+    shirts = [{ size: n, attendeeName: contact?.name || "" }];
+  }
+
+  // Normalize sizes & ensure at least 1 item
+  const normalizedShirts: Shirt[] =
+    shirts
+      .map((s) => ({
+        attendeeName: (s?.attendeeName || "").trim(),
+        size: normalizeSize(s?.size) ?? "M",
+      }))
+      .filter(Boolean) || [{ size: "M", attendeeName: "" }];
+
+  const quantity = Math.max(1, normalizedShirts.length);
+
   const stripe = getStripe();
-
-  const quantity = Math.max(1, shirts?.length ?? 1);
-
   const looksLikePriceId = TEE_PRICE_ID?.startsWith("price_") ?? false;
   const unitAmount = Number.isFinite(Number(TEE_PRICE_CENTS))
     ? Number(TEE_PRICE_CENTS)
@@ -77,16 +111,16 @@ export async function POST(req: NextRequest) {
   const productData: { name: string; description: string; images: string[] } = {
     name: "AVAILABLE Tee",
     description: "Declare it. Wear it.",
-    // Must be an absolute, public URL so Stripe can fetch it
-    images: [getImageUrl(baseUrl)],
+    images: [getImageUrl(baseUrl)], // absolute, public URL
   };
 
+  // Line items: either reference a pre-made Price or inline price_data
   const lineItems =
     looksLikePriceId
       ? [
           {
             // Using a pre-created Price: cannot override product_data/images here.
-            // Ensure the Product in Stripe Dashboard has an image set.
+            // Ensure the Product in Stripe Dashboard has an image set to display it in Checkout.
             price: TEE_PRICE_ID as string,
             quantity,
             adjustable_quantity: { enabled: true, minimum: 1, maximum: 10 },
@@ -116,31 +150,18 @@ export async function POST(req: NextRequest) {
       shipping_address_collection: { allowed_countries: ["US", "CA"] },
       phone_number_collection: { enabled: true },
       line_items: lineItems,
-      custom_fields: [
-        {
-          key: "shirt_size",
-          label: { type: "custom", custom: "Shirt Size" },
-          type: "dropdown",
-          dropdown: {
-            options: [
-              { label: "XS", value: "XS" },
-              { label: "S", value: "S" },
-              { label: "M", value: "M" },
-              { label: "L", value: "L" },
-              { label: "XL", value: "XL" },
-              { label: "2XL", value: "2XL" },
-              { label: "3XL", value: "3XL" },
-            ],
-          },
-          optional: false,
-        },
-      ],
+
+      // ✅ No custom_fields — we rely on sizes from registration
       metadata: {
+        registration_id: registrationId || "",
         contact_name: contact?.name || "",
         contact_email: contact?.email || "",
         contact_phone: contact?.phone || "",
-        shirts: JSON.stringify(shirts),
+        // Helpful summaries in the Dashboard:
+        shirt_sizes: normalizedShirts.map((s) => s.size).join(","),
+        shirts: JSON.stringify(normalizedShirts),
       },
+
       success_url: `${baseUrl}/thank-you?checkout=success&poll=1`,
       cancel_url: `${baseUrl}/register?checkout=cancelled`,
     });
@@ -154,8 +175,6 @@ export async function POST(req: NextRequest) {
 
 function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) {
-    throw new Error("STRIPE_SECRET_KEY is not set");
-  }
+  if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
   return new Stripe(key);
 }
