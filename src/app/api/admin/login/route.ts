@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-
 const ADMIN_COOKIE = "admin_auth";
 
 export async function POST(req: NextRequest) {
@@ -11,9 +10,9 @@ export async function POST(req: NextRequest) {
   res.cookies.set(ADMIN_COOKIE, "1", {
     httpOnly: true,
     sameSite: "lax",
-    secure: true,
+    secure: true,          // keep true in production; use false only on http://localhost
     path: "/",
-    maxAge: 60 * 60 * 8, // 8 hours
+    maxAge: 60 * 60 * 8,   // 8 hours
   });
   return res;
 }

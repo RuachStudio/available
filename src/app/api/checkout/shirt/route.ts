@@ -1,3 +1,4 @@
+// src/app/api/checkout/shirt/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 
@@ -10,10 +11,29 @@ function getBaseUrl(): string {
   try {
     const u = new URL(envBase);
     const host = u.hostname.toLowerCase();
+    // Normalize any godscoffeecall.com variants back to the canonical host
     if (host === "godscoffeecall.com" || host.endsWith(".godscoffeecall.com")) {
       return fallback;
     }
     return u.origin;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Build an absolute, publicly reachable image URL for Stripe Checkout.
+ * Priority:
+ *  1) STRIPE_TEE_IMAGE_URL (must be absolute http/https)
+ *  2) /images/available-tee.png on the canonical host
+ */
+function getImageUrl(baseUrl: string): string {
+  const envUrl = process.env.STRIPE_TEE_IMAGE_URL;
+  const fallback = `${baseUrl}/images/available-tee.png`;
+  const candidate = envUrl && /^https?:\/\//i.test(envUrl) ? envUrl : fallback;
+  try {
+    new URL(candidate); // validate absolute URL
+    return candidate;
   } catch {
     return fallback;
   }
@@ -49,13 +69,16 @@ export async function POST(req: NextRequest) {
   const quantity = Math.max(1, shirts?.length ?? 1);
 
   const looksLikePriceId = TEE_PRICE_ID?.startsWith("price_") ?? false;
-  const unitAmount = Number.isFinite(Number(TEE_PRICE_CENTS)) ? Number(TEE_PRICE_CENTS) : 2500; // $25 default
+  const unitAmount = Number.isFinite(Number(TEE_PRICE_CENTS))
+    ? Number(TEE_PRICE_CENTS)
+    : 2500; // $25 default
 
   const baseUrl = getBaseUrl();
   const productData: { name: string; description: string; images: string[] } = {
     name: "AVAILABLE Tee",
     description: "Declare it. Wear it.",
-    images: [`${baseUrl}/images/shirt.jpeg`],
+    // Must be an absolute, public URL so Stripe can fetch it
+    images: [getImageUrl(baseUrl)],
   };
 
   const lineItems =
@@ -63,7 +86,7 @@ export async function POST(req: NextRequest) {
       ? [
           {
             // Using a pre-created Price: cannot override product_data/images here.
-            // Ensure the Product in Stripe Dashboard has an image set to display it in Checkout.
+            // Ensure the Product in Stripe Dashboard has an image set.
             price: TEE_PRICE_ID as string,
             quantity,
             adjustable_quantity: { enabled: true, minimum: 1, maximum: 10 },
@@ -84,7 +107,8 @@ export async function POST(req: NextRequest) {
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      locale: "en",
+      // Auto locale avoids the test-bundle './en' warning you saw
+      locale: "auto",
       submit_type: "pay",
       customer_email: contact?.email || undefined,
       customer_creation: "always",

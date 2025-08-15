@@ -6,28 +6,31 @@ function LoginContent() {
   const params = useSearchParams(); // must be inside Suspense
   const router = useRouter();
 
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const redirect = params.get("redirect") || "/admin";
+  // middleware redirects to /admin/login?next=/admin or another admin path
+  const next = params.get("next") || "/admin";
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/auth", {
+      const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ password }),
       });
+
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || "Login failed");
       }
-      router.push(redirect);
+
+      // replace to avoid back-button returning to login
+      router.replace(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -40,20 +43,11 @@ function LoginContent() {
       <div className="w-full max-w-md bg-white rounded-xl shadow p-6">
         <h1 className="text-xl font-semibold mb-4">Admin Login</h1>
         {error && (
-          <div className="mb-3 rounded bg-red-50 text-red-700 px-3 py-2 text-sm">{error}</div>
+          <div className="mb-3 rounded bg-red-50 text-red-700 px-3 py-2 text-sm">
+            {error}
+          </div>
         )}
         <form onSubmit={onSubmit} className="space-y-3">
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Email</label>
-            <input
-              type="email"
-              className="w-full border rounded px-3 py-2"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="username"
-            />
-          </div>
           <div>
             <label className="block text-sm text-gray-600 mb-1">Password</label>
             <input
