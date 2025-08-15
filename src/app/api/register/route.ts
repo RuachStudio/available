@@ -1,13 +1,15 @@
+// src/app/api/register/route.ts
 import { NextResponse } from "next/server";
 import { Prisma, ShirtSize } from "@prisma/client";
-// Lazy load Prisma to avoid build-time initialization
-// import { prisma } from "@/lib/prisma";
 import nodemailer from "nodemailer";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 export const revalidate = 0; // Disable caching and force runtime execution
-import 'server-only';
+import "server-only";
 
+// -----------------------------
+// Types
+// -----------------------------
 type Attendee = {
   name: string;
   phone: string;
@@ -17,19 +19,29 @@ type Attendee = {
   notes?: string;
 };
 
-// Map incoming shirt size strings to Prisma enum; return null if invalid/empty
+// -----------------------------
+// Utilities
+// -----------------------------
 function normalizeShirtSize(input?: string | null): ShirtSize | null {
   if (!input) return null;
   const v = String(input).trim().toUpperCase();
   switch (v) {
-    case "XS": return ShirtSize.XS;
-    case "S": return ShirtSize.S;
-    case "M": return ShirtSize.M;
-    case "L": return ShirtSize.L;
-    case "XL": return ShirtSize.XL;
-    case "2XL": return ShirtSize.E2XL;
-    case "3XL": return ShirtSize.E3XL;
-    default: return null;
+    case "XS":
+      return ShirtSize.XS;
+    case "S":
+      return ShirtSize.S;
+    case "M":
+      return ShirtSize.M;
+    case "L":
+      return ShirtSize.L;
+    case "XL":
+      return ShirtSize.XL;
+    case "2XL":
+      return ShirtSize.E2XL;
+    case "3XL":
+      return ShirtSize.E3XL;
+    default:
+      return null;
   }
 }
 
@@ -54,7 +66,11 @@ const sendEmail = async (options: nodemailer.SendMailOptions) => {
   await transporter.sendMail(options);
 };
 
-const buildConfirmationEmail = (name: string, attendees: Attendee[], prayerRequest?: string) => `
+const buildConfirmationEmail = (
+  name: string,
+  attendees: Attendee[],
+  prayerRequest?: string
+) => `
   <h2>Hi ${name},</h2>
   <p>🎉 Thank you for registering for the <strong>AVAILABLE Conference</strong>!</p>
   <p><strong>Tickets Reserved:</strong> ${attendees.length}</p>
@@ -84,7 +100,13 @@ const buildConfirmationEmail = (name: string, attendees: Attendee[], prayerReque
   <p>— The AVAILABLE Conference Team</p>
 `;
 
-const buildAdminEmail = (name: string, phone: string, email: string, attendees: Attendee[], prayerRequest?: string) => `
+const buildAdminEmail = (
+  name: string,
+  phone: string,
+  email: string,
+  attendees: Attendee[],
+  prayerRequest?: string
+) => `
   <h2>New Registration Received</h2>
   <p><strong>Name:</strong> ${name}</p>
   <p><strong>Phone:</strong> ${phone}</p>
@@ -94,16 +116,27 @@ const buildAdminEmail = (name: string, phone: string, email: string, attendees: 
   <hr/>
   <h3>Attendees:</h3>
   <ul>
-    ${attendees.map(a => `<li>${a.name} (${a.phone}) - Shirt Size: ${a.shirtSize}</li>`).join("")}
+    ${attendees
+      .map(
+        (a) =>
+          `<li>${a.name || "N/A"} (${a.phone || "N/A"}) - Shirt Size: ${
+            a.shirtSize || "N/A"
+          }</li>`
+      )
+      .join("")}
   </ul>
 `;
 
+// -----------------------------
+// Route
+// -----------------------------
 export async function POST(req: Request) {
   try {
     console.log("📥 Incoming registration request...");
-    const { prisma } = await import('@/lib/prisma');
+    const { prisma } = await import("@/lib/prisma");
 
-    const body = await req.json() as {
+    // Parse + types
+    const body = (await req.json()) as {
       contactName: string;
       contactPhone: string;
       contactEmail: string;
@@ -126,17 +159,50 @@ export async function POST(req: Request) {
     } = body;
 
     console.log("✅ Parsed request data:", {
-      contactName, contactPhone, contactEmail, attendeeCount: attendees?.length
+      contactName,
+      contactPhone,
+      contactEmail,
+      attendeeCount: attendees?.length,
     });
 
     // Basic required fields
-    if (!contactName || !contactPhone || !contactEmail) {
-      console.error("❌ Validation failed: Missing required contact fields.");
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (
+      !contactName ||
+      !contactPhone ||
+      !contactEmail ||
+      !String(contactEmail).includes("@")
+    ) {
+      console.error("❌ Validation failed: Missing/invalid contact fields.");
+      return NextResponse.json(
+        { error: "Missing or invalid contact fields" },
+        { status: 400 }
+      );
+    }
+
+    const emailLc = contactEmail.trim().toLowerCase();
+    const phoneClean = contactPhone.trim();
+
+    // Idempotency / Duplicate pre-check (email OR phone)
+    const existing = await prisma.registration.findFirst({
+      where: {
+        OR: [{ contactEmail: emailLc }, { contactPhone: phoneClean }],
+      },
+      include: { attendees: true },
+    });
+
+    if (existing) {
+      console.log(
+        "ℹ️ Existing registration found — returning idempotent success."
+      );
+      return NextResponse.json({
+        success: true,
+        duplicate: true,
+        registration: existing,
+      });
     }
 
     // 1) Clean incoming attendees & drop fully-empty rows
-    const cleanedAttendees = attendees
+    const cleanedAttendees = (attendees || [])
       .map((a) => ({
         name: (a?.name ?? "").trim(),
         phone: cleanString(a?.phone),
@@ -146,7 +212,7 @@ export async function POST(req: Request) {
         shirtSize: normalizeShirtSize(a?.shirtSize),
       }))
       .filter((a) => {
-        // "empty" if all primary identifiers are missing
+        // Consider "empty" if name, phone, and email are all absent/blank
         const emptyName = !a.name;
         const emptyPhone = !a.phone;
         const emptyEmail = !a.email;
@@ -157,28 +223,34 @@ export async function POST(req: Request) {
     if (cleanedAttendees.length === 0) {
       cleanedAttendees.push({
         name: contactName.trim(),
-        phone: cleanString(contactPhone),
-        email: cleanString(contactEmail.toLowerCase()),
+        phone: cleanString(phoneClean),
+        email: cleanString(emailLc),
         address: cleanString(contactAddress),
         notes: null,
-        shirtSize: normalizeShirtSize(primaryWantsShirt ? primaryShirtSize : null),
+        shirtSize: normalizeShirtSize(
+          primaryWantsShirt ? primaryShirtSize : null
+        ),
       });
     }
 
     // 3) Guard: ensure at least one attendee with a name
     if (cleanedAttendees.length === 0 || !cleanedAttendees[0].name) {
       console.error("❌ Validation failed: No valid attendees.");
-      return NextResponse.json({ error: "At least one attendee is required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "At least one attendee is required" },
+        { status: 400 }
+      );
     }
 
+    // 4) Persist
     console.log("🗄 Creating registration record in database...");
     let registration;
     try {
       registration = await prisma.registration.create({
         data: {
           contactName,
-          contactPhone,
-          contactEmail: contactEmail.toLowerCase(),
+          contactPhone: phoneClean,
+          contactEmail: emailLc,
           contactAddress,
           prayerRequest,
           attendees: {
@@ -198,11 +270,14 @@ export async function POST(req: Request) {
         include: { attendees: true },
       });
     } catch (dbErr: unknown) {
-      if (dbErr instanceof Prisma.PrismaClientKnownRequestError && dbErr.code === "P2002") {
+      if (
+        dbErr instanceof Prisma.PrismaClientKnownRequestError &&
+        dbErr.code === "P2002"
+      ) {
         console.error("❌ Duplicate entry detected:", dbErr.meta);
         return NextResponse.json(
-          { error: "Duplicate entry", field: dbErr.meta?.target },
-          { status: 400 }
+          { error: "Already registered", duplicate: true, field: dbErr.meta?.target },
+          { status: 409 }
         );
       }
       if (dbErr instanceof Error) {
@@ -212,14 +287,19 @@ export async function POST(req: Request) {
       throw new Error("Unknown database error");
     }
 
+    // 5) Emails (best-effort; failures do not block success)
     console.log("📧 Sending confirmation email...");
     try {
-      if (contactEmail) {
+      if (emailLc) {
         await sendEmail({
           from: `"AVAILABLE Conference" <${process.env.EMAIL_USER}>`,
-          to: contactEmail,
+          to: emailLc,
           subject: "Your AVAILABLE Conference Registration is Confirmed!",
-          html: buildConfirmationEmail(contactName, cleanedAttendees as Attendee[], prayerRequest),
+          html: buildConfirmationEmail(
+            contactName,
+            cleanedAttendees as unknown as Attendee[],
+            prayerRequest
+          ),
         });
       }
     } catch (emailErr: unknown) {
@@ -235,9 +315,9 @@ export async function POST(req: Request) {
           subject: "New Conference Registration Submitted",
           html: buildAdminEmail(
             contactName,
-            contactPhone,
-            contactEmail,
-            cleanedAttendees as Attendee[],
+            phoneClean,
+            emailLc,
+            cleanedAttendees as unknown as Attendee[],
             prayerRequest
           ),
         });
@@ -251,7 +331,10 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error("❌ Registration Error:", error);
-      return NextResponse.json({ error: error.message || "Registration failed" }, { status: 500 });
+      return NextResponse.json(
+        { error: error.message || "Registration failed" },
+        { status: 500 }
+      );
     }
     console.error("❌ Registration Error:", error);
     return NextResponse.json({ error: "Registration failed" }, { status: 500 });
