@@ -3,6 +3,22 @@ import Stripe from "stripe";
 
 export const runtime = "nodejs";
 
+function getBaseUrl(req: NextRequest): string {
+  const fallback = "https://www.godscoffeecall.com";
+  const envBase = process.env.NEXT_PUBLIC_BASE_URL;
+  if (!envBase) return fallback;
+  try {
+    const u = new URL(envBase);
+    const host = u.hostname.toLowerCase();
+    if (host === "godscoffeecall.com" || host.endsWith(".godscoffeecall.com")) {
+      return fallback;
+    }
+    return u.origin;
+  } catch {
+    return fallback;
+  }
+}
+
 // You may set either STRIPE_TEE_PRICE_ID (e.g., "price_...") or STRIPE_TEE_PRICE_CENTS (e.g., "2500")
 const TEE_PRICE_ID = process.env.STRIPE_TEE_PRICE_ID;
 const TEE_PRICE_CENTS = process.env.STRIPE_TEE_PRICE_CENTS;
@@ -35,33 +51,40 @@ export async function POST(req: NextRequest) {
   const looksLikePriceId = TEE_PRICE_ID?.startsWith("price_") ?? false;
   const unitAmount = Number.isFinite(Number(TEE_PRICE_CENTS)) ? Number(TEE_PRICE_CENTS) : 2500; // $25 default
 
-  const lineItems = [
-    looksLikePriceId
-      ? {
-          price: TEE_PRICE_ID as string,
-          quantity,
-          adjustable_quantity: { enabled: true, minimum: 1, maximum: 10 },
-        }
-      : {
-          price_data: {
-            currency: "usd",
-            unit_amount: unitAmount,
-            product_data: { name: "AVAILABLE Tee" },
-          },
-          quantity,
-          adjustable_quantity: { enabled: true, minimum: 1, maximum: 10 },
-        },
-  ];
+  const baseUrl = getBaseUrl(req);
+  const productData: { name: string; description: string; images: string[] } = {
+    name: "AVAILABLE Tee",
+    description: "Declare it. Wear it.",
+    images: [`${baseUrl}/images/shirt.jpeg`],
+  };
 
-  const envBase = process.env.NEXT_PUBLIC_BASE_URL;
-  const origin = new URL(req.url).origin;
-  const baseUrl = !envBase || /(^|\.)your-domain\.com$/i.test(new URL(envBase).hostname)
-    ? origin
-    : envBase;
+  const lineItems =
+    looksLikePriceId
+      ? [
+          {
+            // Using a pre-created Price: cannot override product_data/images here.
+            // Ensure the Product in Stripe Dashboard has an image set to display it in Checkout.
+            price: TEE_PRICE_ID as string,
+            quantity,
+            adjustable_quantity: { enabled: true, minimum: 1, maximum: 10 },
+          },
+        ]
+      : [
+          {
+            price_data: {
+              currency: "usd",
+              unit_amount: unitAmount,
+              product_data: productData,
+            },
+            quantity,
+            adjustable_quantity: { enabled: true, minimum: 1, maximum: 10 },
+          },
+        ];
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+      locale: "en",
       submit_type: "pay",
       customer_email: contact?.email || undefined,
       customer_creation: "always",
@@ -69,6 +92,25 @@ export async function POST(req: NextRequest) {
       shipping_address_collection: { allowed_countries: ["US", "CA"] },
       phone_number_collection: { enabled: true },
       line_items: lineItems,
+      custom_fields: [
+        {
+          key: "shirt_size",
+          label: { type: "custom", custom: "Shirt Size" },
+          type: "dropdown",
+          dropdown: {
+            options: [
+              { label: "XS", value: "XS" },
+              { label: "S", value: "S" },
+              { label: "M", value: "M" },
+              { label: "L", value: "L" },
+              { label: "XL", value: "XL" },
+              { label: "2XL", value: "2XL" },
+              { label: "3XL", value: "3XL" },
+            ],
+          },
+          optional: false,
+        },
+      ],
       metadata: {
         contact_name: contact?.name || "",
         contact_email: contact?.email || "",
