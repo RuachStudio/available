@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import Vote from "./Vote";
 
 const shirtSizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
@@ -33,7 +32,6 @@ interface ConferenceRegistrationProps {
 
 export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRegistrationProps) {
   const [ticketCount, setTicketCount] = useState(1);
-  const [showPoll, setShowPoll] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState<RegistrationForm>({
@@ -94,7 +92,7 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
       });
 
       const dupCT = duplicateCheck.headers.get("content-type") || "";
-      let duplicateResult: any = null;
+      let duplicateResult: { exists?: boolean } | null = null;
       if (dupCT.includes("application/json")) {
         duplicateResult = await duplicateCheck.json().catch(() => null);
       }
@@ -127,7 +125,7 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
       });
 
       const regCT = res.headers.get("content-type") || "";
-      let regData: any = null;
+      let regData: unknown = null;
 
       if (!res.ok) {
         const body = regCT.includes("application/json")
@@ -138,18 +136,15 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
           statusText: res.statusText,
           body,
         });
-        if (
-          regCT.includes("application/json") &&
-          (body as any)?.error === "Duplicate entry" &&
-          (body as any)?.field?.includes("contactPhone")
-        ) {
-          setErrorMessage("⚠️ This phone number is already registered.");
-        } else if (
-          regCT.includes("application/json") &&
-          (body as any)?.error === "Duplicate entry" &&
-          (body as any)?.field?.includes("contactEmail")
-        ) {
-          setErrorMessage("⚠️ This email is already registered.");
+        if (regCT.includes("application/json") && typeof body === "object" && body !== null) {
+          const maybeErr = body as { error?: string; field?: string };
+          if (maybeErr.error === "Duplicate entry" && (maybeErr.field || "").includes("contactPhone")) {
+            setErrorMessage("⚠️ This phone number is already registered.");
+          } else if (maybeErr.error === "Duplicate entry" && (maybeErr.field || "").includes("contactEmail")) {
+            setErrorMessage("⚠️ This email is already registered.");
+          } else {
+            setErrorMessage("❌ Registration failed. Please try again.");
+          }
         } else {
           setErrorMessage("❌ Registration failed. Please try again.");
         }
@@ -169,7 +164,7 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
       console.log("Registration successful:", regData);
       setSuccessMessage("✅ Registration successful! A confirmation email has been sent.");
       setTimeout(() => setSuccessMessage(null), 4000);
-      setShowPoll(true); // Show poll instead of closing modal
+      // Poll moved to /thank-you. Redirect will be handled below.
 
       // 3) Build shirt line items
       const selectedShirts: { size: string; attendeeName: string }[] = [];
@@ -184,6 +179,12 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
           selectedShirts.push({ size: a.shirtSize, attendeeName: a.name || "Guest" });
         }
       });
+
+      // If no shirts were selected, send user to Thank You page with poll prompt
+      if (selectedShirts.length === 0) {
+        window.location.href = "/thank-you?register=success&poll=1";
+        return;
+      }
 
       if (selectedShirts.length > 0) {
         try {
@@ -256,163 +257,141 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center overflow-auto">
           <AnimatePresence mode="wait">
-            {!showPoll ? (
-              <motion.div
-                key="registration"
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -30 }}
-                transition={{ duration: 0.3 }}
-                className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-2xl text-black relative max-h-[90vh] overflow-y-auto"
-              >
-                {/* Close Button */}
-                <button 
-                  onClick={onClose} 
-                  className="absolute top-3 right-3 bg-black text-white hover:bg-red-600 rounded-full w-10 h-10 flex items-center justify-center shadow-lg text-2xl transition-colors duration-300"
-                  aria-label="Close"
-                >
-                  ✕
-                </button>
-      <h2 className="text-2xl font-bold text-center mb-4">Conference Registration</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Primary Contact */}
-        <input name="contactName" type="text" placeholder="Your Full Name" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
-        <input name="contactPhone" type="tel" placeholder="Your Phone Number" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
-        <input name="contactEmail" type="email" placeholder="Your Email" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
-        <input name="contactAddress" type="text" placeholder="Your Mailing Address (Optional)" className="w-full p-3 border rounded-lg" onChange={handleChange} />
-
-        {/* Shirt selection for Primary Contact */}
-        <div className="space-y-2">
-          <label className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              name="primaryWantsShirt"
-              checked={formData.primaryWantsShirt}
-              onChange={handleChange}
-              className="h-4 w-4"
-            />
-            <span className="font-medium">Add AVAILABLE Tee to my registration</span>
-          </label>
-          {formData.primaryWantsShirt && (
-            <select
-              name="primaryShirtSize"
-              required
-              className="w-full p-3 border rounded-lg"
-              value={formData.primaryShirtSize}
-              onChange={handleChange}
+            <motion.div
+              key="registration"
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -30 }}
+              transition={{ duration: 0.3 }}
+              className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-2xl text-black relative max-h-[90vh] overflow-y-auto"
             >
-              <option value="">Select T-Shirt Size</option>
-              {shirtSizes.map((size) => (
-                <option key={size} value={size}>{size}</option>
-              ))}
-            </select>
-          )}
-          <p className="text-sm text-gray-500">Shirts are optional and purchased after registration via secure checkout.</p>
-        </div>
-
-        {/* Number of Tickets */}
-        <div>
-          <label className="block mb-1 font-semibold">Number of Tickets</label>
-          <select
-            value={ticketCount}
-            onChange={(e) => handleTicketChange(Number(e.target.value))}
-            className="w-full p-3 border rounded-lg"
-          >
-            {[1, 2, 3, 4, 5].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Dynamic Attendee Fields */}
-        <AnimatePresence>
-          {formData.attendees.map((attendee, idx) => (
-            idx === 0 ? null : (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="p-4 border rounded-lg bg-gray-50 mt-2"
+              {/* Close Button */}
+              <button 
+                onClick={onClose} 
+                className="absolute top-3 right-3 bg-black text-white hover:bg-red-600 rounded-full w-10 h-10 flex items-center justify-center shadow-lg text-2xl transition-colors duration-300"
+                aria-label="Close"
               >
-                <h3 className="font-semibold mb-2">Attendee {idx + 1}</h3>
-                <input name="name" placeholder="Full Name" required value={attendee.name} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
-                <input name="phone" placeholder="Phone Number" required value={attendee.phone} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
-                <input name="email" placeholder="Email (Optional)" value={attendee.email} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
-                <input name="address" placeholder="Mailing Address (Optional)" value={attendee.address} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
-                <label className="flex items-center gap-2 mb-2">
-                  <input
-                    type="checkbox"
-                    name="wantsShirt"
-                    checked={attendee.wantsShirt}
-                    onChange={(e) => handleChange(e, idx)}
-                    className="h-4 w-4"
-                  />
-                  <span>Add AVAILABLE Tee</span>
-                </label>
-                {attendee.wantsShirt && (
-                  <select name="shirtSize" required value={attendee.shirtSize} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)}>
-                    <option value="">Select T-Shirt Size</option>
-                    {shirtSizes.map((size) => (
-                      <option key={size} value={size}>{size}</option>
+                ✕
+              </button>
+              <h2 className="text-2xl font-bold text-center mb-4">Conference Registration</h2>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Primary Contact */}
+                <input name="contactName" type="text" placeholder="Your Full Name" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
+                <input name="contactPhone" type="tel" placeholder="Your Phone Number" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
+                <input name="contactEmail" type="email" placeholder="Your Email" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
+                <input name="contactAddress" type="text" placeholder="Your Mailing Address (Optional)" className="w-full p-3 border rounded-lg" onChange={handleChange} />
+
+                {/* Shirt selection for Primary Contact */}
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      name="primaryWantsShirt"
+                      checked={formData.primaryWantsShirt}
+                      onChange={handleChange}
+                      className="h-4 w-4"
+                    />
+                    <span className="font-medium">Add AVAILABLE Tee to my registration</span>
+                  </label>
+                  {formData.primaryWantsShirt && (
+                    <select
+                      name="primaryShirtSize"
+                      required
+                      className="w-full p-3 border rounded-lg"
+                      value={formData.primaryShirtSize}
+                      onChange={handleChange}
+                    >
+                      <option value="">Select T-Shirt Size</option>
+                      {shirtSizes.map((size) => (
+                        <option key={size} value={size}>{size}</option>
+                      ))}
+                    </select>
+                  )}
+                  <p className="text-sm text-gray-500">Shirts are optional and purchased after registration via secure checkout.</p>
+                </div>
+
+                {/* Number of Tickets */}
+                <div>
+                  <label className="block mb-1 font-semibold">Number of Tickets</label>
+                  <select
+                    value={ticketCount}
+                    onChange={(e) => handleTicketChange(Number(e.target.value))}
+                    className="w-full p-3 border rounded-lg"
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
                     ))}
                   </select>
-                )}
-                <textarea 
-                  name="notes" 
-                  placeholder="Special Notes (Dietary/Accessibility)" 
-                  value={attendee.notes} 
-                  onChange={(e) => handleChange(e, idx)} 
-                  className="w-full p-2 border rounded"></textarea>
-              </motion.div>
-            )
-          ))}
-        </AnimatePresence>
+                </div>
 
-        {/* Prayer Requests */}
-        <textarea
-          name="prayerRequest"
-          placeholder="Prayer Requests (Optional)"
-          className="w-full p-3 border rounded-lg"
-          onChange={handleChange}
-        ></textarea>
+                {/* Dynamic Attendee Fields */}
+                <AnimatePresence>
+                  {formData.attendees.map((attendee, idx) => (
+                    idx === 0 ? null : (
+                      <motion.div
+                        key={idx}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="p-4 border rounded-lg bg-gray-50 mt-2"
+                      >
+                        <h3 className="font-semibold mb-2">Attendee {idx + 1}</h3>
+                        <input name="name" placeholder="Full Name" required value={attendee.name} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
+                        <input name="phone" placeholder="Phone Number" required value={attendee.phone} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
+                        <input name="email" placeholder="Email (Optional)" value={attendee.email} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
+                        <input name="address" placeholder="Mailing Address (Optional)" value={attendee.address} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
+                        <label className="flex items-center gap-2 mb-2">
+                          <input
+                            type="checkbox"
+                            name="wantsShirt"
+                            checked={attendee.wantsShirt}
+                            onChange={(e) => handleChange(e, idx)}
+                            className="h-4 w-4"
+                          />
+                          <span>Add AVAILABLE Tee</span>
+                        </label>
+                        {attendee.wantsShirt && (
+                          <select name="shirtSize" required value={attendee.shirtSize} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)}>
+                            <option value="">Select T-Shirt Size</option>
+                            {shirtSizes.map((size) => (
+                              <option key={size} value={size}>{size}</option>
+                            ))}
+                          </select>
+                        )}
+                        <textarea 
+                          name="notes" 
+                          placeholder="Special Notes (Dietary/Accessibility)" 
+                          value={attendee.notes} 
+                          onChange={(e) => handleChange(e, idx)} 
+                          className="w-full p-2 border rounded"></textarea>
+                      </motion.div>
+                    )
+                  ))}
+                </AnimatePresence>
 
-        <p className="text-xs text-gray-500">Note: If you add a shirt, you’ll be redirected to secure payment after submitting.</p>
+                {/* Prayer Requests */}
+                <textarea
+                  name="prayerRequest"
+                  placeholder="Prayer Requests (Optional)"
+                  className="w-full p-3 border rounded-lg"
+                  onChange={handleChange}
+                ></textarea>
 
-        <button 
-          type="submit" 
-          className={`w-full py-3 rounded-lg font-semibold transition ${
-            isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-black text-white hover:bg-gray-800"
-          }`}
-          disabled={isSubmitting}
-        >
-          {isSubmitting ? "Submitting..." : "Submit Registration"}
-        </button>
-      </form>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="poll"
-                initial={{ opacity: 0, y: 30 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -30 }}
-                transition={{ duration: 0.3 }}
-                className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-3xl text-black relative max-h-[90vh] overflow-y-auto"
-              >
-                {/* Close Button */}
+                <p className="text-xs text-gray-500">Note: If you add a shirt, you’ll be redirected to secure payment after submitting.</p>
+
                 <button 
-                  onClick={onClose} 
-                  className="absolute top-3 right-3 bg-black text-white hover:bg-red-600 rounded-full w-10 h-10 flex items-center justify-center shadow-lg text-2xl transition-colors duration-300"
-                  aria-label="Close"
+                  type="submit" 
+                  className={`w-full py-3 rounded-lg font-semibold transition ${
+                    isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-black text-white hover:bg-gray-800"
+                  }`}
+                  disabled={isSubmitting}
                 >
-                  ✕
+                  {isSubmitting ? "Submitting..." : "Submit Registration"}
                 </button>
-                {/* Pass auto-close callback to Vote */}
-                <Vote onComplete={onClose} />
-              </motion.div>
-            )}
+              </form>
+            </motion.div>
           </AnimatePresence>
         </div>
       )}

@@ -102,7 +102,14 @@ export async function POST(req: Request) {
   try {
     console.log("📥 Incoming registration request...");
     const { prisma } = await import('@/lib/prisma'); 
-    const body = await req.json();
+    const body: {
+      contactName: string;
+      contactPhone: string;
+      contactEmail: string;
+      contactAddress?: string;
+      prayerRequest?: string;
+      attendees: Attendee[];
+    } = await req.json();
     const { contactName, contactPhone, contactEmail, contactAddress, prayerRequest, attendees } = body;
 
     console.log("✅ Parsed request data:", { contactName, contactPhone, contactEmail, attendeeCount: attendees?.length });
@@ -125,7 +132,7 @@ export async function POST(req: Request) {
           attendees: {
             create: (attendees as Attendee[]).map(a => {
               const size = normalizeShirtSize(a?.shirtSize);
-              const base: any = {
+              const base: Prisma.AttendeeCreateWithoutRegistrationInput = {
                 name: (a?.name ?? "").trim(),
                 phone: cleanString(a?.phone),
                 email: cleanString(a?.email?.toLowerCase() || null),
