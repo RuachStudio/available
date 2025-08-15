@@ -37,6 +37,7 @@ model Registration {
 
   attendees        Attendee[]
 
+  @@index([createdAt])
   @@index([contactEmail])
   @@index([contactPhone])
 }
@@ -44,8 +45,8 @@ model Registration {
 model Attendee {
   id             String       @id @default(uuid())
   name           String
-  phone          String?      @unique
-  email          String?      @unique
+  phone          String?
+  email          String?
   address        String?
 
   // Optional shirt per attendee
@@ -54,9 +55,10 @@ model Attendee {
 
   notes          String?
   registrationId String
-  registration   Registration @relation(fields: [registrationId], references: [id])
+  registration   Registration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
 
   @@index([registrationId])
+  @@index([wantsShirt, shirtSize])
 }
 
 model SpeakerPoll {
