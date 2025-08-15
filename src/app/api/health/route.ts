@@ -8,7 +8,13 @@ export async function GET() {
   try {
     const now = await prisma.$queryRawUnsafe<Date>("select now()");
     return NextResponse.json({ ok: true, now });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+  } catch (e: unknown) {
+    let message: string;
+    if (e instanceof Error) {
+      message = e.message;
+    } else {
+      message = String(e);
+    }
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 }

@@ -11,8 +11,7 @@ function getStripe() {
   return new Stripe(key);
 }
 
-function getBaseUrl(req: NextRequest): string {
-  const origin = new URL(req.url).origin;
+function getBaseUrl(): string {
   const envBase = process.env.NEXT_PUBLIC_BASE_URL || "https://www.godscoffeecall.com";
 
   // Fallback to godscoffeecall.com if unset, placeholder, or invalid
@@ -51,7 +50,7 @@ export async function POST(req: NextRequest) {
     const unitAmount = Math.round(clamped * 100);
 
     const stripe = getStripe();
-    const baseUrl = getBaseUrl(req);
+    const baseUrl = getBaseUrl();
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
