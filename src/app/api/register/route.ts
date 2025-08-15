@@ -201,7 +201,7 @@ export async function POST(req: Request) {
     }
 
     // 1) Clean incoming attendees & keep any row with name OR email OR phone
-    let cleanedAttendees: AttendeeClean[] = (attendees || [])
+    const cleanedAttendees: AttendeeClean[] = (attendees ?? [])
       .map((a): AttendeeClean => ({
         name: (a?.name ?? "").trim(),
         phone: cleanString(a?.phone),
