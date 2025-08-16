@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { Prisma, ShirtSize } from "@prisma/client";
 import nodemailer from "nodemailer";
+import { checkDuplicate } from "@/lib/checkDuplicate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -183,20 +184,21 @@ export async function POST(req: Request) {
     const emailLc = contactEmail.trim().toLowerCase();
     const phoneClean = contactPhone.trim();
 
-    // Duplicate pre-check (email OR phone) → graceful OK response
-    const existing = await prisma.registration.findFirst({
-      where: { OR: [{ contactEmail: emailLc }, { contactPhone: phoneClean }] },
-      select: { id: true },
-    });
-
-    if (existing) {
-      console.log("ℹ️ Duplicate registration; returning graceful success.");
-      return NextResponse.json({
-        success: true,
-        duplicate: true,
-        registrationId: existing.id,
-        message: "You’re already registered.",
-      });
+    // 🔹 Unified duplicate check (Registration + Attendees; email + last10(phone))
+    {
+      const dup = await checkDuplicate(prisma, emailLc, phoneClean);
+      if (dup.duplicate) {
+        console.log("ℹ️ Duplicate registration; returning graceful success.");
+        return NextResponse.json({
+          success: true,
+          duplicate: true,
+          registrationId: dup.existingId,
+          via: dup.via,                 // "registration" | "attendee"
+          message: dup.message,         // friendly prompt for shirt purchase
+          contactName: dup.contactName,
+          attendeesCount: dup.attendeesCount,
+        });
+      }
     }
 
     // 1) Clean incoming attendees & keep any row with name OR email OR phone
