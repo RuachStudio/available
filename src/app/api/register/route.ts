@@ -188,7 +188,7 @@ export async function POST(req: Request) {
     {
       const dup = await checkDuplicate(prisma, emailLc, phoneClean);
       if (dup.duplicate) {
-        console.log("ℹ️ Duplicate registration; returning graceful success.");
+        console.log("ℹ️ Duplicate registration; returning graceful success.", dup);
         return NextResponse.json({
           success: true,
           duplicate: true,
@@ -224,7 +224,7 @@ export async function POST(req: Request) {
     };
 
     const alreadyHasPrimary = cleanedAttendees.some((a) => {
-      const nameMatch = a.name && a.name.toLowerCase() === primaryCandidate.name.toLowerCase();
+      const nameMatch  = a.name  && a.name.toLowerCase() === primaryCandidate.name.toLowerCase();
       const emailMatch = a.email && primaryCandidate.email && a.email === primaryCandidate.email;
       const phoneMatch = a.phone && primaryCandidate.phone && a.phone === primaryCandidate.phone;
       return nameMatch || emailMatch || phoneMatch;
