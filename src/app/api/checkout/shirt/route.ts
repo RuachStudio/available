@@ -189,7 +189,7 @@ export async function POST(req: NextRequest) {
       const productData: Stripe.Checkout.SessionCreateParams.LineItem.PriceData.ProductData = {
         name: `AVAILABLE Tee (${size})`,
         description: "Declare it. Wear it.",
-        ...(imageUrl ? { images: [imageUrl] } : {}), // only include if valid
+        images: ["https://www.godscoffeecall.com/images/shirt.jpeg"],
       };
       return {
         price_data: {
