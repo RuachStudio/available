@@ -12,17 +12,22 @@ function PollOverlay({
   onComplete: () => void;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl relative">
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 bg-black text-white hover:bg-red-600 rounded-full w-10 h-10 flex items-center justify-center shadow-lg text-2xl transition-colors duration-300"
-          aria-label="Close"
-        >
-          ✕
-        </button>
-        <div className="p-6">
-          <Vote onComplete={onComplete} />
+    // Make the overlay itself scrollable
+    <div className="fixed inset-0 z-[9999] bg-black/70 overflow-y-auto overscroll-contain">
+      {/* Use items-start + min-h to allow panel to push page and scroll */}
+      <div className="min-h-full flex items-start justify-center p-4">
+        {/* Make the panel scroll within the viewport */}
+        <div className="relative w-full max-w-3xl bg-white rounded-2xl shadow-xl max-h-[85vh] overflow-y-auto">
+          <button
+            onClick={onClose}
+            className="sticky top-3 float-right mr-3 bg-black text-white hover:bg-red-600 rounded-full w-10 h-10 flex items-center justify-center shadow-lg text-2xl transition-colors duration-300"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+          <div className="p-6 clear-both">
+            <Vote onComplete={onComplete} />
+          </div>
         </div>
       </div>
     </div>
@@ -34,6 +39,17 @@ function ThankYouContent() {
   const router = useRouter();
   const [showPoll, setShowPoll] = useState(false);
 
+  // Lock background scroll when overlay is open
+  useEffect(() => {
+    if (showPoll) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [showPoll]);
+
   // Read params once per change
   const status = useMemo(
     () => params.get("checkout") || params.get("register") || "",
@@ -43,19 +59,16 @@ function ThankYouContent() {
   const debugPoll = useMemo(() => params.get("poll") === "debug", [params]);
 
   useEffect(() => {
-    const done = typeof window !== "undefined" && localStorage.getItem("gcc_poll_done") === "1";
-    // Debug forces it, even if done before
+    const done =
+      typeof window !== "undefined" &&
+      localStorage.getItem("gcc_poll_done") === "1";
     if (debugPoll) {
       setShowPoll(true);
       return;
     }
-    if (wantsPoll && !done) {
-      setShowPoll(true);
-    } else {
-      setShowPoll(false);
-    }
+    setShowPoll(wantsPoll && !done);
 
-    // Helpful diagnostics
+    // diagnostics
     // eslint-disable-next-line no-console
     console.log("[thank-you]", {
       status,
@@ -69,9 +82,7 @@ function ThankYouContent() {
   const handlePollComplete = () => {
     try {
       localStorage.setItem("gcc_poll_done", "1");
-    } catch {
-      // ignore storage errors
-    }
+    } catch {}
     setShowPoll(false);
 
     // Remove poll query from URL so refresh doesn't bring it back
@@ -81,9 +92,7 @@ function ThankYouContent() {
       const base = "/thank-you";
       const q = sp.toString();
       router.replace(q ? `${base}?${q}` : base);
-    } catch {
-      // no-op
-    }
+    } catch {}
   };
 
   return (
