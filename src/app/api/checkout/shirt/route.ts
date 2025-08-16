@@ -41,7 +41,6 @@ function getBaseUrl(req: NextRequest): string {
       const u = new URL(envBase);
       const host = u.hostname.toLowerCase();
       const isLocal = host === "localhost" || host === "127.0.0.1";
-      // Normalize any *.godscoffeecall.com to canonical
       if (host === "godscoffeecall.com" || host.endsWith(".godscoffeecall.com")) {
         return canonical;
       }
@@ -70,16 +69,20 @@ function getBaseUrl(req: NextRequest): string {
   return canonical;
 }
 
-/** Public, absolute image URL for Stripe to fetch */
-function getImageUrl(baseUrl: string): string {
+/**
+ * Get a safe, public absolute image URL for Stripe.
+ * - We REQUIRE STRIPE_TEE_IMAGE_URL to be an absolute https URL.
+ * - If it's missing/invalid, we return `null` and omit images entirely (avoids broken icon).
+ */
+function getStripeImageUrl(): string | null {
   const envUrl = process.env.STRIPE_TEE_IMAGE_URL;
-  const fallback = `${baseUrl}/images/available-tee.png`;
-  const candidate = envUrl && /^https?:\/\//i.test(envUrl) ? envUrl : fallback;
+  if (!envUrl) return null;
   try {
-    new URL(candidate); // validate absolute URL
-    return candidate;
+    const u = new URL(envUrl);
+    if (u.protocol !== "https:") return null; // require https for Stripe fetch
+    return u.toString();
   } catch {
-    return fallback;
+    return null;
   }
 }
 
@@ -101,7 +104,7 @@ function hasAnySizePriceIds(): boolean {
 
 // Either use one saved price (no size in the name) or inline price_data per size.
 const TEE_PRICE_ID = process.env.STRIPE_TEE_PRICE_ID;        // e.g. "price_..."
-const TEE_PRICE_CENTS = process.env.STRIPE_TEE_PRICE_CENTS;  // e.g. "2500"
+const TEE_PRICE_CENTS = process.env.STRIPE_TEE_PRICE_CENTS;  // e.g. "2000"
 
 export async function POST(req: NextRequest) {
   // Require at least one of these so we have a price
@@ -112,7 +115,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Expected payload from your registration flow
   type Shirt = { size?: string; attendeeName?: string };
   type Contact = { name?: string; email?: string; phone?: string };
 
@@ -131,13 +133,11 @@ export async function POST(req: NextRequest) {
     // ignore parse errors; we’ll default below
   }
 
-  // If no explicit shirts array was sent, derive from primaryShirtSize (picked during registration)
   if (shirts.length === 0) {
     const n = normalizeSize(primaryShirtSize) ?? "M";
     shirts = [{ size: n, attendeeName: contact?.name || "" }];
   }
 
-  // Normalize sizes & ensure at least 1 item
   const normalizedShirts =
     (shirts
       .map((s) => ({
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
       }))
       .filter(Boolean)) || [{ size: "M", attendeeName: "" }];
 
-  // Group by size so we can show sizes in Checkout (separate rows)
+  // Group by size so we can show sizes as separate lines
   const sizeCounts: Record<string, number> = {};
   for (const s of normalizedShirts) {
     const key = s.size!;
@@ -155,21 +155,18 @@ export async function POST(req: NextRequest) {
 
   const stripe = getStripe();
   const baseUrl = getBaseUrl(req);
-  const imageUrl = getImageUrl(baseUrl);
+  const imageUrl = getStripeImageUrl(); // may be null
 
   const unitAmount =
     Number.isFinite(Number(TEE_PRICE_CENTS)) && Number(TEE_PRICE_CENTS) > 0
       ? Number(TEE_PRICE_CENTS)
-      : 2500; // $25 default
+      : 2000; // default $20
 
   const looksLikeSingleSavedPrice = TEE_PRICE_ID?.startsWith("price_") ?? false;
 
   let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
   if (looksLikeSingleSavedPrice && !hasAnySizePriceIds()) {
-    // MODE A: single saved price for all sizes (Stripe won't show size in name)
-    // If you want sizes visible on Checkout using saved prices,
-    // set STRIPE_PRICE_ID_XS, STRIPE_PRICE_ID_S, ... and fall into MODE B below.
     const totalQty = Object.values(sizeCounts).reduce((a, b) => a + b, 0);
     lineItems = [
       {
@@ -179,40 +176,36 @@ export async function POST(req: NextRequest) {
       },
     ];
   } else if (hasAnySizePriceIds()) {
-    // MODE B: one saved price PER SIZE -> sizes show in the line item name
     lineItems = Object.entries(sizeCounts).map(([size, qty]) => {
       const priceId = PRICE_BY_SIZE[size];
       if (!priceId) {
         throw new Error(`Missing Stripe Price ID for size ${size}`);
       }
+      return { price: priceId, quantity: qty };
+    });
+  } else {
+    // Inline price_data so we can customize the name with size.
+    lineItems = Object.entries(sizeCounts).map(([size, qty]) => {
+      const productData: Stripe.Checkout.SessionCreateParams.LineItem.PriceData.ProductData = {
+        name: `AVAILABLE Tee (${size})`,
+        description: "Declare it. Wear it.",
+        ...(imageUrl ? { images: [imageUrl] } : {}), // only include if valid
+      };
       return {
-        price: priceId,
+        price_data: {
+          currency: "usd",
+          unit_amount: unitAmount,
+          product_data: productData,
+        },
         quantity: qty,
       };
     });
-  } else {
-    // MODE C (recommended if you don't maintain prices per size):
-    // Use price_data so we can customize the product name per size.
-    lineItems = Object.entries(sizeCounts).map(([size, qty]) => ({
-      price_data: {
-        currency: "usd",
-        unit_amount: unitAmount,
-        product_data: {
-          name: `AVAILABLE Tee (${size})`,
-          description: "Declare it. Wear it.",
-          images: [imageUrl], // absolute, public URL
-        },
-      },
-      quantity: qty,
-      // Typically you do NOT want adjustable quantities when splitting by size
-      // adjustable_quantity: { enabled: true, minimum: 1, maximum: 10 },
-    }));
   }
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      locale: "auto", // avoids the test-bundle './en' warning
+      locale: "auto",
       submit_type: "pay",
       customer_email: contact?.email || undefined,
       customer_creation: "always",
@@ -228,7 +221,7 @@ export async function POST(req: NextRequest) {
         contact_email: contact?.email || "",
         contact_phone: contact?.phone || "",
         shirt_sizes: normalizedShirts.map((s) => s.size).join(","), // e.g. "M,L,L"
-        shirts: JSON.stringify(normalizedShirts),                   // full details
+        shirts: JSON.stringify(normalizedShirts),
       },
 
       success_url: `${baseUrl}/thank-you?checkout=success&poll=1`,
