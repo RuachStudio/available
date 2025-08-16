@@ -8,6 +8,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 import "server-only";
 
+// Include type so relation fields (attendees) are available
+type RegistrationWithAttendees = Prisma.RegistrationGetPayload<{
+  include: { attendees: true };
+}>;
+
 // -----------------------------
 // Types
 // -----------------------------
@@ -156,7 +161,7 @@ export async function POST(req: Request) {
       contactAddress,
       prayerRequest,
       attendees = [],
-      primaryWantsShirt,
+      primaryWantsShirt = false,
       primaryShirtSize,
     } = body;
 
@@ -184,7 +189,7 @@ export async function POST(req: Request) {
     const emailLc = contactEmail.trim().toLowerCase();
     const phoneClean = contactPhone.trim();
 
-    // 🔹 Unified duplicate check (Registration + Attendees; email + last10(phone))
+    // 🔹 Unified duplicate check (Registration + Attendees; email + last10(phone) handled inside helper)
     {
       const dup = await checkDuplicate(prisma, emailLc, phoneClean);
       if (dup.duplicate) {
@@ -249,7 +254,7 @@ export async function POST(req: Request) {
 
     // 4) Persist
     console.log("🗄 Creating registration record in database...");
-    let registration;
+    let registration: RegistrationWithAttendees;
     try {
       registration = await prisma.registration.create({
         data: {
@@ -258,6 +263,13 @@ export async function POST(req: Request) {
           contactEmail: emailLc,
           contactAddress,
           prayerRequest,
+
+          // persist primary shirt choice on the registration too
+          primaryWantsShirt: Boolean(primaryWantsShirt),
+          primaryShirtSize: normalizeShirtSize(
+            primaryWantsShirt ? primaryShirtSize : null
+          ),
+
           attendees: {
             create: cleanedAttendees.map((a) => {
               const base: Prisma.AttendeeCreateWithoutRegistrationInput = {
@@ -279,6 +291,7 @@ export async function POST(req: Request) {
         dbErr instanceof Prisma.PrismaClientKnownRequestError &&
         dbErr.code === "P2002"
       ) {
+        // Unique constraint (email or phone) — treat as graceful duplicate
         console.error("ℹ️ Duplicate via unique constraint:", dbErr.meta);
         return NextResponse.json({
           success: true,

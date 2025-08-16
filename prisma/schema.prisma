@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -9,7 +10,7 @@ datasource db {
 }
 
 // --- Enums ---
-// Use an enum for shirt sizes; map 2XL/3XL to valid identifiers
+// 2XL/3XL mapped to valid enum identifiers used by Prisma/TS
 enum ShirtSize {
   XS
   S
@@ -22,14 +23,15 @@ enum ShirtSize {
 
 // --- Models ---
 model Registration {
-  id             String   @id @default(uuid())
-  contactName    String
-  contactPhone   String?  @unique
-  contactEmail   String?  @unique
-  contactAddress String?
-  prayerRequest  String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  contactName        String
+  contactPhone       String?  @unique
+  contactPhoneLast10 String?  @unique // <- normalized digits (last 10)
+  contactEmail       String?  @unique
+  contactAddress     String?
+  prayerRequest      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   // Primary contact optional shirt
   primaryWantsShirt Boolean    @default(false)
@@ -43,11 +45,12 @@ model Registration {
 }
 
 model Attendee {
-  id      String  @id @default(uuid())
-  name    String
-  phone   String?
-  email   String?
-  address String?
+  id          String  @id @default(uuid())
+  name        String
+  phone       String?
+  phoneLast10 String? // <- normalized digits (last 10)
+  email       String?
+  address     String?
 
   // Optional shirt per attendee
   wantsShirt Boolean    @default(false)
@@ -59,6 +62,8 @@ model Attendee {
 
   @@index([registrationId])
   @@index([wantsShirt, shirtSize])
+  @@index([phoneLast10]) // for fast lookups by normalized phone
+  @@index([email])
 }
 
 model SpeakerPoll {

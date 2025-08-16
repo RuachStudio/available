@@ -4,12 +4,14 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 
 const speakerPosters = [
-  { src: "/speakers/jessica-michelle.webp", alt: "Jessica Gainey & Michelle Chapman" },
-  { src: "/speakers/bradley.webp", alt: "Bradley Bennett" },
+  { src: "/speakers/jessica-michelle.webp", alt: "Michelle Chapman & Jessica Gainey" },
+  { src: "/speakers/bradley.webp", alt: "Pastor Bradley Bennett" },
+  { src: "/speakers/brandon-kalyn.webp", alt: "Brandon Kinchen & Kalyn Belvin" },
   { src: "/speakers/brooke.webp", alt: "Brooke Kinchen" },
-  { src: "/speakers/ashley.webp", alt: "Ashley May" },
-  { src: "/speakers/tessie.webp", alt: "Tessie Baehr" },
   { src: "/speakers/krista.webp", alt: "Apostle Krista Lathem" },
+  { src: "/speakers/tessie.webp", alt: "Tessie Baehr" },
+  { src: "/speakers/ashley.webp", alt: "Ashley May" },
+  { src: "/speakers/mitchell-brooke.webp", alt: "Mitchell Padayao & Brooke Kinchen" },
 ];
 
 export default function SpeakersSection() {
