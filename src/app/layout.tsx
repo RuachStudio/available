@@ -16,8 +16,32 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.godscoffeecall.com"),
   title: "AVAILABLE Conference – GodsCoffeeCall.com",
-  description: "Join us for the AVAILABLE Conference – A call to radical availability for God’s purpose.",
+  description: "Join us for the AVAILABLE Conference. Register now at GodsCoffeeCall.com",
+  alternates: {
+    canonical: "https://www.godscoffeecall.com",
+  },
+  openGraph: {
+    title: "AVAILABLE Conference",
+    description: "Join us for the AVAILABLE Conference. Register now at GodsCoffeeCall.com",
+    url: "https://www.godscoffeecall.com",
+    type: "website",
+    images: [
+      {
+        url: "/images/available-conference-flyer.jpg",
+        width: 1179,
+        height: 1538,
+        alt: "AVAILABLE Conference flyer",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AVAILABLE Conference",
+    description: "Join us for the AVAILABLE Conference. Register now at GodsCoffeeCall.com",
+    images: ["/images/available-conference-flyer.jpg"],
+  },
 };
 
 export default function RootLayout({
