@@ -68,15 +68,6 @@ function ThankYouContent() {
     }
     setShowPoll(wantsPoll && !done);
 
-    // diagnostics
-    // eslint-disable-next-line no-console
-    console.log("[thank-you]", {
-      status,
-      wantsPoll,
-      debugPoll,
-      alreadyDone: done,
-      url: typeof window !== "undefined" ? window.location.href : "(server)",
-    });
   }, [wantsPoll, debugPoll, status]);
 
   const handlePollComplete = () => {

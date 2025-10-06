@@ -91,6 +91,6 @@ export async function checkDuplicate(
     via,
     contactName: existing.contactName ?? null,
     attendeesCount: existing.attendees.length,
-    message: "It looks like you’ve already registered. Would you like to purchase a shirt?",
+    message: "It looks like you’ve already registered. We’ll see you at the conference!",
   };
 }

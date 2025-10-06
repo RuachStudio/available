@@ -4,6 +4,8 @@ import Stripe from "stripe";
 
 export const runtime = "nodejs";
 
+const SHIRT_CHECKOUT_ENABLED = process.env.ENABLE_SHIRT_CHECKOUT === "true";
+
 /** Normalize a size string into XS/S/M/L/XL/2XL/3XL; otherwise null */
 function normalizeSize(x?: string | null): string | null {
   if (!x) return null;
@@ -107,6 +109,13 @@ const TEE_PRICE_ID = process.env.STRIPE_TEE_PRICE_ID;        // e.g. "price_..."
 const TEE_PRICE_CENTS = process.env.STRIPE_TEE_PRICE_CENTS;  // e.g. "2000"
 
 export async function POST(req: NextRequest) {
+  if (!SHIRT_CHECKOUT_ENABLED) {
+    return NextResponse.json(
+      { error: "T-shirt ordering is currently closed." },
+      { status: 410 }
+    );
+  }
+
   // Require at least one of these so we have a price
   if (!TEE_PRICE_ID && !TEE_PRICE_CENTS) {
     return NextResponse.json(
@@ -189,7 +198,7 @@ export async function POST(req: NextRequest) {
       const productData: Stripe.Checkout.SessionCreateParams.LineItem.PriceData.ProductData = {
         name: `AVAILABLE Tee (${size})`,
         description: "Declare it. Wear it.",
-        images: ["https://www.godscoffeecall.com/images/shirt.jpeg"],
+        images: [imageUrl || "https://www.godscoffeecall.com/images/shirt.jpeg"],
       };
       return {
         price_data: {

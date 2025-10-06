@@ -2,8 +2,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-const shirtSizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
-
 type Attendee = {
   name: string;
   phone: string;
@@ -165,69 +163,8 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
       setSuccessMessage("✅ Registration successful! A confirmation email has been sent.");
       setTimeout(() => setSuccessMessage(null), 4000);
       // Poll moved to /thank-you. Redirect will be handled below.
-
-      // 3) Build shirt line items
-      const selectedShirts: { size: string; attendeeName: string }[] = [];
-      if (formData.primaryWantsShirt && formData.primaryShirtSize) {
-        selectedShirts.push({
-          size: formData.primaryShirtSize,
-          attendeeName: formData.contactName || "Primary",
-        });
-      }
-      formData.attendees.forEach((a: Attendee) => {
-        if (a.wantsShirt && a.shirtSize) {
-          selectedShirts.push({ size: a.shirtSize, attendeeName: a.name || "Guest" });
-        }
-      });
-
-      // If no shirts were selected, send user to Thank You page with poll prompt
-      if (selectedShirts.length === 0) {
-        window.location.href = "/thank-you?register=success&poll=1";
-        return;
-      }
-
-      if (selectedShirts.length > 0) {
-        try {
-          // Use the singular route we implemented
-          const checkoutRes = await fetch("/api/checkout/shirt", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              shirts: selectedShirts,
-              contact: {
-                name: formData.contactName,
-                email: formData.contactEmail,
-                phone: formData.contactPhone,
-              },
-            }),
-          });
-
-          const coCT = checkoutRes.headers.get("content-type") || "";
-          if (!checkoutRes.ok) {
-            const body = coCT.includes("application/json")
-              ? await checkoutRes.json().catch(() => ({}))
-              : await checkoutRes.text().catch(() => "");
-            console.warn("Stripe session error:", {
-              status: checkoutRes.status,
-              statusText: checkoutRes.statusText,
-              body,
-            });
-          } else if (!coCT.includes("application/json")) {
-            const text = await checkoutRes.text().catch(() => "");
-            console.error("Expected JSON from /api/checkout/shirt, received:", text.slice(0, 500));
-          } else {
-            const checkoutData = await checkoutRes.json().catch(() => null);
-            if (checkoutData?.url) {
-              window.location.href = checkoutData.url; // Redirect to Stripe Checkout
-              return;
-            } else {
-              console.warn("Stripe session response missing URL:", checkoutData);
-            }
-          }
-        } catch (err) {
-          console.error("Stripe session creation failed", err);
-        }
-      }
+      window.location.href = "/thank-you?register=success";
+      return;
     } catch (error) {
       console.error("Error:", error);
       setErrorMessage("❌ There was an issue submitting your registration.");
@@ -281,33 +218,9 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
                 <input name="contactEmail" type="email" placeholder="Your Email" required className="w-full p-3 border rounded-lg" onChange={handleChange} />
                 <input name="contactAddress" type="text" placeholder="Your Mailing Address (Optional)" className="w-full p-3 border rounded-lg" onChange={handleChange} />
 
-                {/* Shirt selection for Primary Contact */}
-                <div className="space-y-2">
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      name="primaryWantsShirt"
-                      checked={formData.primaryWantsShirt}
-                      onChange={handleChange}
-                      className="h-4 w-4"
-                    />
-                    <span className="font-medium">Add AVAILABLE Tee to my registration</span>
-                  </label>
-                  {formData.primaryWantsShirt && (
-                    <select
-                      name="primaryShirtSize"
-                      required
-                      className="w-full p-3 border rounded-lg"
-                      value={formData.primaryShirtSize}
-                      onChange={handleChange}
-                    >
-                      <option value="">Select T-Shirt Size</option>
-                      {shirtSizes.map((size) => (
-                        <option key={size} value={size}>{size}</option>
-                      ))}
-                    </select>
-                  )}
-                  <p className="text-sm text-gray-500">Shirts are optional and purchased after registration via secure checkout.</p>
+                {/* Shirt ordering disabled */}
+                <div className="rounded-lg border border-gray-200 bg-gray-100 p-3 text-sm text-gray-600">
+                  AVAILABLE tees are currently sold out. We’ll let you know if merch returns.
                 </div>
 
                 {/* Number of Tickets */}
@@ -342,24 +255,6 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
                         <input name="phone" placeholder="Phone Number" required value={attendee.phone} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
                         <input name="email" placeholder="Email (Optional)" value={attendee.email} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
                         <input name="address" placeholder="Mailing Address (Optional)" value={attendee.address} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)} />
-                        <label className="flex items-center gap-2 mb-2">
-                          <input
-                            type="checkbox"
-                            name="wantsShirt"
-                            checked={attendee.wantsShirt}
-                            onChange={(e) => handleChange(e, idx)}
-                            className="h-4 w-4"
-                          />
-                          <span>Add AVAILABLE Tee</span>
-                        </label>
-                        {attendee.wantsShirt && (
-                          <select name="shirtSize" required value={attendee.shirtSize} className="w-full p-2 border rounded mb-2" onChange={(e) => handleChange(e, idx)}>
-                            <option value="">Select T-Shirt Size</option>
-                            {shirtSizes.map((size) => (
-                              <option key={size} value={size}>{size}</option>
-                            ))}
-                          </select>
-                        )}
                         <textarea 
                           name="notes" 
                           placeholder="Special Notes (Dietary/Accessibility)" 
@@ -378,9 +273,6 @@ export default function ConferenceRegistration({ isOpen, onClose }: ConferenceRe
                   className="w-full p-3 border rounded-lg"
                   onChange={handleChange}
                 ></textarea>
-
-                <p className="text-xs text-gray-500">Note: If you add a shirt, you’ll be redirected to secure payment after submitting.</p>
-
                 <button 
                   type="submit" 
                   className={`w-full py-3 rounded-lg font-semibold transition ${
